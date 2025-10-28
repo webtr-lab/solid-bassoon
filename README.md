@@ -44,7 +44,7 @@ A full-stack GPS tracking application with real-time vehicle monitoring, locatio
 1. **Clone the repository**
 ```bash
 git clone <repository-url>
-cd gps-tracker
+cd repository-dir
 ```
 
 2. **Configure environment variables**
