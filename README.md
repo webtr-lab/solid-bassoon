@@ -317,7 +317,7 @@ Create a cron job to backup daily:
 crontab -e
 
 # Add this line (backup daily at 2 AM)
-0 2 * * * cd /path/to/gps-tracker && docker-compose exec -T db pg_dump -U gpsadmin gps_tracker > backups/auto_backup_$(date +\%Y\%m\%d_\%H\%M\%S).sql
+0 2 * * * cd /path/to/repository-dir && docker-compose exec -T db pg_dump -U gpsadmin gps_tracker > backups/auto_backup_$(date +\%Y\%m\%d_\%H\%M\%S).sql
 ```
 
 ## User Roles
