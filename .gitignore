@@ -1,0 +1,57 @@
+# Environment Configuration
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Instance-Specific Data
+database/
+backups/
+ssl/
+*.sql
+*.backup
+
+# Python - Backend
+__pycache__/
+*.py[cod]
+*.pyc
+venv/
+env/
+*.egg-info/
+
+# Node.js - Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Build Artifacts
+frontend/dist/
+frontend/build/
+
+# Logs
+*.log
+logs/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Operating System
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Security - Certificates and Keys
+*.pem
+*.key
+*.crt
+
+# Claude Code Instance Settings
+.claude/settings.local.json
