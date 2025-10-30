@@ -774,7 +774,7 @@ def rate_limit_nominatim():
 @app.route('/api/geocode', methods=['GET'])
 @login_required
 def geocode_address():
-    """Geocode address using Nominatim (OpenStreetMap)"""
+    """Geocode address using local Nominatim instance"""
     address = request.args.get('address', '')
 
     if not address:
@@ -785,31 +785,37 @@ def geocode_address():
     import json
     import traceback
 
-    # Respect Nominatim's 1 request/second rate limit
-    rate_limit_nominatim()
+    # Get Nominatim URL from environment or use local instance
+    nominatim_url = os.getenv('NOMINATIM_URL', 'http://nominatim:8080')
+
+    # Only apply rate limiting for public Nominatim
+    if 'nominatim.openstreetmap.org' in nominatim_url:
+        rate_limit_nominatim()
 
     try:
-        encoded_address = urllib.parse.quote(address)
+        # Add Suriname to the search query for better results
+        full_query = f"{address}, Suriname"
+        encoded_query = urllib.parse.quote(full_query)
 
         # Suriname bounding box: roughly -58.1 to -53.9 longitude, 2.0 to 6.0 latitude
         # Paramaribo center: approximately 5.8520, -55.2038
         # viewbox format: left,top,right,bottom (lon_min,lat_max,lon_max,lat_min)
         viewbox = '-58.1,6.0,-53.9,2.0'
 
-        # Bias results to Suriname/Paramaribo area (removed bounded=1 to be less restrictive)
-        url = (f'https://nominatim.openstreetmap.org/search?'
-               f'q={encoded_address}, Suriname&'  # Add country to query
+        # Build URL for local or public Nominatim
+        url = (f'{nominatim_url}/search?'
+               f'q={encoded_query}&'
                f'format=json&'
                f'limit=10&'
-               f'viewbox={viewbox}')  # Viewbox biases results but doesn't restrict
+               f'viewbox={viewbox}&'
+               f'bounded=0')  # Don't restrict to viewbox, just bias results
 
         print(f"[GEOCODE] Requesting: {url}", flush=True)
 
         req = urllib.request.Request(url)
-        # Nominatim requires a valid User-Agent with contact info
+        # Nominatim requires a valid User-Agent
         req.add_header('User-Agent', 'GPS-Tracker-Suriname/1.0 (Vehicle Tracking System)')
-        req.add_header('Referer', request.host_url)
-        req.add_header('Accept', 'application/json')
+        # Note: Don't set Accept header - Nominatim returns format based on 'format=' param
         req.add_header('Accept-Language', 'en')
 
         with urllib.request.urlopen(req, timeout=10) as response:
@@ -817,7 +823,7 @@ def geocode_address():
             print(f"[GEOCODE] Response status: {response.status}", flush=True)
             data = json.loads(response_text)
 
-        print(f"[GEOCODE] Found {len(data)} results", flush=True)
+        print(f"[GEOCODE] Found {len(data)} results from {nominatim_url}", flush=True)
 
         results = [{
             'name': item.get('display_name', ''),
@@ -832,11 +838,13 @@ def geocode_address():
     except urllib.error.HTTPError as e:
         error_msg = f"HTTP Error {e.code}: {e.reason}"
         print(f"[GEOCODE ERROR] {error_msg}", flush=True)
-        print(f"[GEOCODE ERROR] This usually means Nominatim is blocking our requests. Consider using a local Nominatim instance.", flush=True)
+        if 'nominatim.openstreetmap.org' in nominatim_url:
+            print(f"[GEOCODE ERROR] This usually means Nominatim is blocking requests. Consider using a local Nominatim instance.", flush=True)
         return jsonify({'error': error_msg}), 500
     except urllib.error.URLError as e:
         error_msg = f"URL Error: {e.reason}"
         print(f"[GEOCODE ERROR] {error_msg}", flush=True)
+        print(f"[GEOCODE ERROR] Is the Nominatim service running? Check: docker compose logs nominatim", flush=True)
         return jsonify({'error': error_msg}), 500
     except Exception as e:
         error_msg = str(e)
@@ -865,7 +873,8 @@ def create_backup(backup_name=None):
 
         # Set environment variables for pg_dump
         env = os.environ.copy()
-        env['PGPASSWORD'] = parsed.password
+        # URL-decode the password (handles %2F, %3D, etc.)
+        env['PGPASSWORD'] = urllib.parse.unquote(parsed.password)
 
         # Run pg_dump
         cmd = [
@@ -910,7 +919,8 @@ def restore_backup(backup_filename):
         parsed = urllib.parse.urlparse(db_url)
 
         env = os.environ.copy()
-        env['PGPASSWORD'] = parsed.password
+        # URL-decode the password (handles %2F, %3D, etc.)
+        env['PGPASSWORD'] = urllib.parse.unquote(parsed.password)
 
         # Close all database connections before restore
         with app.app_context():

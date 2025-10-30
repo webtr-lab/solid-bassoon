@@ -10,6 +10,7 @@ backups/
 ssl/
 *.sql
 *.backup
+nominatim-data/
 
 # Python - Backend
 __pycache__/

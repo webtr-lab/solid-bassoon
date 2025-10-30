@@ -60,7 +60,7 @@ Examples:
 ## Testing
 
 Before submitting a PR:
-1. Test the application in Docker: `docker-compose up -d --build`
+1. Test the application in Docker: `docker compose up -d --build`
 2. Verify all core features work:
    - User authentication
    - Vehicle tracking

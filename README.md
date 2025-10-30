@@ -74,7 +74,7 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:8080
 
 3. **Start the application**
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 This will start all services:
@@ -88,7 +88,7 @@ This will start all services:
 On first startup, the application automatically creates an admin user with a random password. To retrieve the credentials:
 
 ```bash
-docker-compose logs backend | grep -A 5 "IMPORTANT"
+docker compose logs backend | grep -A 5 "IMPORTANT"
 ```
 
 You'll see output like:
@@ -171,7 +171,7 @@ npm run dev
 
 ### Build for Production
 ```bash
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ## API Documentation
@@ -216,12 +216,12 @@ See [CLAUDE.md](CLAUDE.md) for detailed API endpoints and architecture documenta
 
 **Check if containers are running:**
 ```bash
-docker-compose ps
+docker compose ps
 ```
 
 All services should show "Up" status. If not:
 ```bash
-docker-compose logs [service_name]
+docker compose logs [service_name]
 ```
 
 **Common issues:**
@@ -232,7 +232,7 @@ docker-compose logs [service_name]
 ### Can't find admin password
 
 ```bash
-docker-compose logs backend | grep -A 10 "Admin user created"
+docker compose logs backend | grep -A 10 "Admin user created"
 ```
 
 If no output, the admin user may already exist. Try the default username `admin` with password reset via database.
@@ -240,17 +240,17 @@ If no output, the admin user may already exist. Try the default username `admin`
 ### Application not updating after code changes
 
 ```bash
-docker-compose down
-docker-compose up -d --build
+docker compose down
+docker compose up -d --build
 ```
 
 ### Reset everything (fresh start)
 
 **WARNING:** This deletes all data!
 ```bash
-docker-compose down -v
+docker compose down -v
 rm -rf database/* backups/*
-docker-compose up -d
+docker compose up -d
 ```
 
 ## API Usage Examples
@@ -293,31 +293,100 @@ curl http://localhost:5000/api/vehicles/1/export?format=csv&hours=168 \
 - **Never commit** `.env` file to version control
 - Set **strong database passwords** (POSTGRES_PASSWORD)
 - Regularly **backup your database** (see Backup section below)
-- Keep Docker images updated: `docker-compose pull && docker-compose up -d`
+- Keep Docker images updated: `docker compose pull && docker compose up -d`
 
 ## Database Backup and Restore
 
-### Manual Backup
+The application provides **two backup systems**:
+
+1. **Application-Level Backups** (automatic + manual via dashboard)
+2. **Server-Level Backups** (via scripts, recommended for production)
+
+### Application-Level Backups
+
+The backend automatically creates backups:
+- **On Startup**: Creates a backup every time the backend starts
+- **Scheduled**: Daily at 2:00 AM UTC (configurable)
+- **Manual**: Via Admin Dashboard → Backups tab
+
+**Naming Convention**:
+- Automatic: `backup_YYYYMMDD_HHMMSS.sql`
+- Manual: `manual_<custom_name>.sql`
+
+**Retention**: Keeps last 10 automatic backups
+
+### Server-Level Backups (Recommended)
+
+For production environments, use the dedicated backup scripts:
+
+**Quick Start:**
+```bash
+# Create a backup now
+./backup-server.sh
+
+# Create a backup with custom name
+./backup-server.sh pre_upgrade
+
+# Set up automated backups with cron
+./setup-cron-backup.sh
+```
+
+**Features:**
+- Independent of application (more reliable)
+- Custom naming to differentiate from app backups
+- Automatic cleanup (keeps last 20, removes >30 days old)
+- Logging to `backup-server.log`
+
+**Naming Convention**: `server_backup_YYYYMMDD_HHMMSS.sql`
+
+### Manual Backup (Direct Database)
 
 ```bash
-docker-compose exec db pg_dump -U gpsadmin gps_tracker > backup_$(date +%Y%m%d_%H%M%S).sql
+docker compose exec db pg_dump -U gpsadmin gps_tracker > backup_$(date +%Y%m%d_%H%M%S).sql
 ```
 
 ### Restore from Backup
 
+**Using Restore Script (Recommended):**
 ```bash
-docker-compose exec -T db psql -U gpsadmin gps_tracker < backup_file.sql
+# Interactive mode - choose from list
+./restore-server.sh
+
+# Restore specific backup
+./restore-server.sh server_backup_20251030_030000.sql
+
+# Restore latest backup
+./restore-server.sh --latest
+
+# List available backups
+./restore-server.sh --list
 ```
 
-### Automated Backups
+**Features:**
+- Lists all available backups with details
+- Creates automatic pre-restore backup for safety
+- Validates backup file before restore
+- Requires explicit "yes" confirmation
+- Restarts backend after restore
 
-Create a cron job to backup daily:
+**Manual Restore (Direct Database):**
 ```bash
-# Edit crontab
-crontab -e
+docker compose exec -T db psql -U gpsadmin gps_tracker < backup_file.sql
+```
 
-# Add this line (backup daily at 2 AM)
-0 2 * * * cd /path/to/repository-dir && docker-compose exec -T db pg_dump -U gpsadmin gps_tracker > backups/auto_backup_$(date +\%Y\%m\%d_\%H\%M\%S).sql
+**From Admin Dashboard:**
+1. Go to Admin Panel → Backups tab
+2. Click "Restore" on the desired backup
+3. Confirm the action
+
+**⚠️ Warning**: Restore will overwrite all current data!
+
+### Permissions Note
+
+If you get permission errors with the backup scripts:
+```bash
+# Fix backup directory permissions
+sudo chown -R $USER:$USER backups/
 ```
 
 ## User Roles

@@ -1558,7 +1558,7 @@ function BackupsManagement() {
           <ol className="text-sm text-yellow-800 ml-4 list-decimal">
             <li>SSH to the server</li>
             <li>Navigate to your project directory</li>
-            <li>Use <code className="bg-yellow-200 px-1 rounded">docker-compose exec</code> to restore from backup (see README.md)</li>
+            <li>Use <code className="bg-yellow-200 px-1 rounded">docker compose exec</code> to restore from backup (see README.md)</li>
           </ol>
           <p className="text-sm text-yellow-700 mt-2">
             See README.md for complete backup and restore instructions.

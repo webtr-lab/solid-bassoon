@@ -8,7 +8,7 @@ This is a GPS tracking application with real-time vehicle monitoring, location h
 
 ## Architecture
 
-### Three-Tier Deployment
+### Four-Tier Deployment
 
 1. **Backend** (Flask/Python) - Port 5000
    - RESTful API for vehicle tracking, user management, and places of interest
@@ -21,10 +21,18 @@ This is a GPS tracking application with real-time vehicle monitoring, location h
    - Two main views: Tracking and Admin (role-based)
    - Auto-refreshes vehicle data every 5 seconds, history every 10 seconds
    - TailwindCSS for styling
+   - Built-in location search with client-side caching (50 entries)
 
 3. **Mobile** (Static HTML) - Port 8080
    - Simple interface for GPS-enabled devices to submit location data
    - Served via nginx
+
+4. **Nominatim** (Geocoding Service) - Port 8081
+   - Local OpenStreetMap Nominatim instance with Suriname map data
+   - Provides instant address/location search without rate limits
+   - ~350MB storage (OSM data + database)
+   - Auto-updates from Geofabrik daily
+   - See NOMINATIM_SETUP.md for details
 
 ### Database Models (backend/app/models.py)
 
@@ -39,7 +47,7 @@ This is a GPS tracking application with real-time vehicle monitoring, location h
 - **Stop Detection** (main.py:145): Automatically saves locations when vehicle stays within 50m for 5+ minutes
 - **Distance Calculation** (main.py:182): Haversine formula for precise GPS distance
 - **Visit Reports** (/api/reports/visits): Matches saved locations to places of interest within 200m threshold
-- **Geocoding** (/api/geocode): Uses OpenStreetMap Nominatim for address lookup
+- **Geocoding** (/api/geocode): Uses local Nominatim instance for instant address lookup (configurable via NOMINATIM_URL)
 
 ### Frontend State Management
 
@@ -94,16 +102,16 @@ npm run preview
 
 ```bash
 # Start all services (requires .env file with database credentials)
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop services
-docker-compose down
+docker compose down
 
 # Rebuild after code changes
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 ## Environment Configuration
@@ -114,6 +122,7 @@ Copy `.env.example` to `.env` and configure:
 - **SECRET_KEY**: Flask session secret (min 32 chars)
 - **CORS_ORIGINS**: Comma-separated allowed origins for CORS
 - **FLASK_ENV**: production/development
+- **NOMINATIM_URL**: Geocoding service URL (default: http://nominatim:8080 for local, or https://nominatim.openstreetmap.org for public)
 
 ## API Endpoints
 
@@ -190,7 +199,7 @@ All coordinates use decimal degrees (latitude, longitude)
 ### Adding a Database Column
 
 1. Modify model in backend/app/models.py
-2. Delete database volume and restart (development): `docker-compose down -v && docker-compose up -d`
+2. Delete database volume and restart (development): `docker compose down -v && docker compose up -d`
 3. Production: Use Flask-Migrate (not currently configured)
 
 ### Changing Map Behavior

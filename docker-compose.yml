@@ -28,6 +28,7 @@ services:
       SECRET_KEY: ${SECRET_KEY}
       FLASK_ENV: ${FLASK_ENV}
       CORS_ORIGINS: ${CORS_ORIGINS}
+      NOMINATIM_URL: ${NOMINATIM_URL}
     volumes:
       - ./backups:/app/backups
     depends_on:
@@ -77,6 +78,38 @@ services:
       - "0.0.0.0:8080:80"
       - "0.0.0.0:8443:443"
 
+  nominatim:
+    image: mediagis/nominatim:4.4
+    container_name: gps_nominatim
+    environment:
+      # Nominatim configuration
+      PBF_URL: file:///nominatim/data/suriname-latest.osm.pbf
+      REPLICATION_URL: https://download.geofabrik.de/south-america/suriname-updates/
+      IMPORT_WIKIPEDIA: "false"
+      IMPORT_US_POSTCODES: "false"
+      IMPORT_GB_POSTCODES: "false"
+      THREADS: 4
+      # Optimization for small dataset
+      NOMINATIM_THREADS: 4
+    volumes:
+      - ./nominatim-data:/nominatim/data
+      - nominatim-db:/var/lib/postgresql/14/main
+    networks:
+      - gps-network
+    restart: unless-stopped
+    ports:
+      - "0.0.0.0:8081:8080"
+    shm_size: 1gb
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/search?q=Paramaribo&format=json"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+
 networks:
   gps-network:
     driver: bridge
+
+volumes:
+  nominatim-db:
