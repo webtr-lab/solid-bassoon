@@ -101,24 +101,24 @@ Backups run automatically via backend scheduler at 2 AM daily.
 
 **Create full backup**:
 ```bash
-./backup-manager.sh --full
+./scripts/backup/backup-manager.sh --full
 ```
 
 **Create daily backup**:
 ```bash
-./backup-manager.sh --daily
+./scripts/backup/backup-manager.sh --daily
 ```
 
 **Auto-decide (full on Sunday, daily otherwise)**:
 ```bash
-./backup-manager.sh --auto
+./scripts/backup/backup-manager.sh --auto
 ```
 
 ### 2. List Backups
 
 **Command line**:
 ```bash
-./backup-manager.sh --list
+./scripts/backup/backup-manager.sh --list
 ```
 
 **Output example**:
@@ -148,12 +148,12 @@ curl -X GET http://localhost:5000/api/backups \
 
 **Cleanup old backups** (removes backups >180 days):
 ```bash
-./backup-manager.sh --cleanup
+./scripts/backup/backup-manager.sh --cleanup
 ```
 
 **Archive old backups** (compress backups >30 days):
 ```bash
-./backup-manager.sh --archive
+./scripts/backup/backup-manager.sh --archive
 ```
 
 ---
@@ -163,7 +163,7 @@ curl -X GET http://localhost:5000/api/backups \
 ### Interactive Restore (Easiest)
 
 ```bash
-./restore-backup.sh --interactive
+./scripts/backup/restore-backup.sh --interactive
 ```
 
 This will:
@@ -176,13 +176,13 @@ This will:
 ### Restore from Latest Backup
 
 ```bash
-./restore-backup.sh --latest
+./scripts/backup/restore-backup.sh --latest
 ```
 
 ### Restore from Specific Date
 
 ```bash
-./restore-backup.sh --date 2025-11-01
+./scripts/backup/restore-backup.sh --date 2025-11-01
 ```
 
 Automatically finds the best backup from that date (prefers full, falls back to daily).
@@ -190,7 +190,7 @@ Automatically finds the best backup from that date (prefers full, falls back to 
 ### Restore from Specific File
 
 ```bash
-./restore-backup.sh --file /home/demo/effective-guide/backups/full/2025/11/03/backup_full_20251103_020000.sql
+./scripts/backup/restore-backup.sh --file /home/demo/effective-guide/backups/full/2025/11/03/backup_full_20251103_020000.sql
 ```
 
 ### Safety Features
@@ -279,7 +279,7 @@ The system automatically syncs backups to a remote server for disaster recovery.
 ### Manual Sync
 
 ```bash
-./rsync-backup-remote.sh
+./scripts/backup/rsync-backup-remote.sh
 ```
 
 **What gets synced**:
@@ -319,7 +319,7 @@ The `app-status-report.sh` script runs daily and checks:
 
 **Run manually**:
 ```bash
-./app-status-report.sh
+./scripts/monitoring/app-status-report.sh
 ```
 
 ### Email Notifications
@@ -341,12 +341,12 @@ The `app-status-report.sh` script runs daily and checks:
 
 **Verify specific backup**:
 ```bash
-./verify-backup.sh backups/full/2025/11/03/backup_full_20251103_020000.sql
+./scripts/backup/verify-backup.sh backups/full/2025/11/03/backup_full_20251103_020000.sql
 ```
 
 **Full restore test**:
 ```bash
-./verify-backup.sh backups/full/2025/11/03/backup_full_20251103_020000.sql --full-test
+./scripts/backup/verify-backup.sh backups/full/2025/11/03/backup_full_20251103_020000.sql --full-test
 ```
 
 ### Verification Checks
@@ -376,9 +376,9 @@ The `app-status-report.sh` script runs daily and checks:
 4. ✅ Verify backups are syncing to remote server
 
 ### Before Major Changes
-1. ✅ Create manual full backup: `./backup-manager.sh --full`
-2. ✅ Verify backup: `./verify-backup.sh <backup-file>`
-3. ✅ Sync to remote: `./rsync-backup-remote.sh`
+1. ✅ Create manual full backup: `./scripts/backup/backup-manager.sh --full`
+2. ✅ Verify backup: `./scripts/backup/verify-backup.sh <backup-file>`
+3. ✅ Sync to remote: `./scripts/backup/rsync-backup-remote.sh`
 4. ✅ Proceed with changes
 
 ### For Disaster Recovery
@@ -391,7 +391,7 @@ The `app-status-report.sh` script runs daily and checks:
 1. ✅ Automatic cleanup keeps last 180 days
 2. ✅ Automatic compression after 30 days
 3. ✅ Monitor disk usage: `du -sh backups/`
-4. ✅ Adjust retention if needed (edit `backup-manager.sh`)
+4. ✅ Adjust retention if needed (edit `scripts/backup/backup-manager.sh`)
 
 ---
 
@@ -406,7 +406,7 @@ tail -50 logs/backup-manager.log
 docker compose ps db
 
 # Try manual backup
-./backup-manager.sh --full
+./scripts/backup/backup-manager.sh --full
 ```
 
 ### Restore Failed
@@ -415,7 +415,7 @@ docker compose ps db
 tail -50 logs/restore.log
 
 # Verify backup first
-./verify-backup.sh <backup-file>
+./scripts/backup/verify-backup.sh <backup-file>
 
 # Check database status
 docker compose ps db
@@ -443,7 +443,7 @@ docker compose logs backend | grep backup
 docker compose exec backend ps aux | grep cron
 
 # Trigger manual backup
-./backup-manager.sh --auto
+./scripts/backup/backup-manager.sh --auto
 ```
 
 ---
@@ -454,17 +454,17 @@ docker compose exec backend ps aux | grep cron
 
 | Task | Command |
 |------|---------|
-| **Create auto backup** | `./backup-manager.sh --auto` |
-| **Create full backup** | `./backup-manager.sh --full` |
-| **List all backups** | `./backup-manager.sh --list` |
-| **Restore latest** | `./restore-backup.sh --latest` |
-| **Restore from date** | `./restore-backup.sh --date 2025-11-01` |
-| **Interactive restore** | `./restore-backup.sh --interactive` |
-| **Verify backup** | `./verify-backup.sh <file>` |
-| **Sync to remote** | `./rsync-backup-remote.sh` |
-| **Cleanup old backups** | `./backup-manager.sh --cleanup` |
-| **Compress old backups** | `./backup-manager.sh --archive` |
-| **Check status** | `./app-status-report.sh` |
+| **Create auto backup** | `./scripts/backup/backup-manager.sh --auto` |
+| **Create full backup** | `./scripts/backup/backup-manager.sh --full` |
+| **List all backups** | `./scripts/backup/backup-manager.sh --list` |
+| **Restore latest** | `./scripts/backup/restore-backup.sh --latest` |
+| **Restore from date** | `./scripts/backup/restore-backup.sh --date 2025-11-01` |
+| **Interactive restore** | `./scripts/backup/restore-backup.sh --interactive` |
+| **Verify backup** | `./scripts/backup/verify-backup.sh <file>` |
+| **Sync to remote** | `./scripts/backup/rsync-backup-remote.sh` |
+| **Cleanup old backups** | `./scripts/backup/backup-manager.sh --cleanup` |
+| **Compress old backups** | `./scripts/backup/backup-manager.sh --archive` |
+| **Check status** | `./scripts/monitoring/app-status-report.sh` |
 
 ### Important Files
 

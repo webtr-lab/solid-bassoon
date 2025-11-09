@@ -85,10 +85,10 @@ monthly-restore-test.sh
 **Usage**:
 ```bash
 # Quick verification (format + checksum)
-./verify-backup.sh backup_20251031_020000.sql
+./scripts/backup/verify-backup.sh backup_20251031_020000.sql
 
 # Full verification with restore test
-./verify-backup.sh backup_20251031_020000.sql --full-test
+./scripts/backup/verify-backup.sh backup_20251031_020000.sql --full-test
 ```
 
 **Checks performed**:
@@ -143,10 +143,10 @@ monthly-restore-test.sh
 **Usage**:
 ```bash
 # Run test manually
-./monthly-restore-test.sh
+./scripts/backup/monthly-restore-test.sh
 
 # Setup automated monthly testing
-./setup-monthly-test-cron.sh
+./scripts/setup/setup-monthly-test-cron.sh
 ```
 
 ---
@@ -168,12 +168,12 @@ chmod +x setup-monthly-test-cron.sh
 ls -lh backups/*.sql
 
 # Verify a backup
-./verify-backup.sh backup_20251031_020000.sql
+./scripts/backup/verify-backup.sh backup_20251031_020000.sql
 ```
 
 3. **Setup monthly restore testing**:
 ```bash
-./setup-monthly-test-cron.sh
+./scripts/setup/setup-monthly-test-cron.sh
 # Select option 1 (1st day of month at 3:00 AM)
 ```
 
@@ -185,10 +185,10 @@ crontab -l
 You should see:
 ```
 # Automatic remote backup to 192.168.100.74
-0 3 * * * /home/demo/effective-guide/rsync-backup-remote.sh >> /home/demo/effective-guide/logs/rsync-backup.log 2>&1
+0 3 * * * /home/demo/effective-guide/scripts/backup/rsync-backup-remote.sh >> /home/demo/effective-guide/logs/rsync-backup.log 2>&1
 
 # Monthly backup restore test
-0 3 1 * * /home/demo/effective-guide/monthly-restore-test.sh >> /home/demo/effective-guide/logs/monthly-restore-test.log 2>&1
+0 3 1 * * /home/demo/effective-guide/scripts/backup/monthly-restore-test.sh >> /home/demo/effective-guide/logs/monthly-restore-test.log 2>&1
 ```
 
 ---
@@ -279,7 +279,7 @@ df -h
 ls -lh backups/
 
 # Try manual verification
-./verify-backup.sh backup_YYYYMMDD_HHMMSS.sql
+./scripts/backup/verify-backup.sh backup_YYYYMMDD_HHMMSS.sql
 ```
 
 ### Issue: Checksum Mismatch After Rsync
@@ -289,7 +289,7 @@ ls -lh backups/
 **Solution**:
 ```bash
 # Re-run rsync manually
-./rsync-backup-remote.sh
+./scripts/backup/rsync-backup-remote.sh
 
 # Manually verify specific file
 LOCAL_MD5=$(md5sum backups/backup_20251031.sql | awk '{print $1}')
@@ -314,13 +314,13 @@ ls -lh backups/*.md5
 ### Manual Testing
 ```bash
 # Verify specific backup
-./verify-backup.sh backup_20251031_020000.sql
+./scripts/backup/verify-backup.sh backup_20251031_020000.sql
 
 # Full restore test
-./verify-backup.sh backup_20251031_020000.sql --full-test
+./scripts/backup/verify-backup.sh backup_20251031_020000.sql --full-test
 
 # Run monthly test manually
-./monthly-restore-test.sh
+./scripts/backup/monthly-restore-test.sh
 ```
 
 ### Monitoring

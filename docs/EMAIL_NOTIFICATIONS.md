@@ -32,7 +32,7 @@ Body: Comprehensive status report with all metrics
 
 **Test Command**:
 ```bash
-./app-status-report.sh
+./scripts/monitoring/app-status-report.sh
 ```
 
 **Configuration**:
@@ -64,7 +64,7 @@ Body: Detailed test report with all verification steps
 
 **Test Command**:
 ```bash
-./monthly-restore-test.sh
+./scripts/backup/monthly-restore-test.sh
 ```
 
 **Configuration**:
@@ -95,7 +95,7 @@ Body: Backup summary with statistics
 
 **Test Command**:
 ```bash
-./rsync-backup-remote.sh
+./scripts/backup/rsync-backup-remote.sh
 ```
 
 **Configuration**:
@@ -126,7 +126,7 @@ Body: Verification details and checks performed
 
 **Test Command**:
 ```bash
-./verify-backup.sh backup_20251031_144231.sql
+./scripts/backup/verify-backup.sh backup_20251031_144231.sql
 ```
 
 **Configuration**:
@@ -227,16 +227,16 @@ Legend:
 
 ```bash
 # Test 1: App Status Report
-./app-status-report.sh
+./scripts/monitoring/app-status-report.sh
 
 # Test 2: Rsync Backup (will actually sync to remote)
-./rsync-backup-remote.sh
+./scripts/backup/rsync-backup-remote.sh
 
 # Test 3: Backup Verification
-./verify-backup.sh $(ls -t backups/backup_*.sql | head -1 | xargs basename)
+./scripts/backup/verify-backup.sh $(ls -t backups/backup_*.sql | head -1 | xargs basename)
 
 # Test 4: Monthly Restore Test
-./monthly-restore-test.sh
+./scripts/backup/monthly-restore-test.sh
 
 # Test 5: Python Email Helper
 python3 send-admin-email.py "[GPS Tracker] Test" "This is a test notification"

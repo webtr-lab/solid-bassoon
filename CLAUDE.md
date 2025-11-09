@@ -103,7 +103,7 @@ grep "api/gps" logs/access.log
 grep "Auto-detected stop" logs/app.log
 ```
 
-See **LOGGING.md** for complete logging documentation.
+See **docs/LOGGING.md** for complete logging documentation.
 
 ### Frontend
 
@@ -151,11 +151,16 @@ Copy `.env.example` to `.env` and configure:
 
 ## API Endpoints
 
+### Health
+- GET /api/health - Health check endpoint
+
 ### Authentication
 - POST /api/auth/register - Create new user
 - POST /api/auth/login - Session-based login
 - POST /api/auth/logout - End session
 - GET /api/auth/check - Check current auth status
+- POST /api/auth/change-password - Change user password
+- GET /api/auth/default-credentials - Check if default credentials should be displayed
 
 ### GPS Data
 - POST /api/gps - Receive location data from devices (requires device_id, latitude, longitude)
@@ -163,10 +168,19 @@ Copy `.env.example` to `.env` and configure:
 ### Vehicles
 - GET /api/vehicles - List all vehicles
 - POST /api/vehicles - Create vehicle (admin only)
+- GET /api/vehicles/:id - Get vehicle details
+- PUT /api/vehicles/:id - Update vehicle (admin only)
+- DELETE /api/vehicles/:id - Delete vehicle (admin only)
 - GET /api/vehicles/:id/location - Latest location
 - GET /api/vehicles/:id/history?hours=24 - Historical track
 - GET /api/vehicles/:id/stats?hours=24 - Distance/speed statistics
 - GET /api/vehicles/:id/export?format=csv&hours=24 - Export data
+
+### Saved Locations (Vehicle Stops)
+- GET /api/vehicles/:id/saved-locations - Get saved locations for vehicle
+- POST /api/vehicles/:id/saved-locations - Create saved location
+- PUT /api/vehicles/:id/saved-locations/:location_id - Update saved location
+- DELETE /api/vehicles/:id/saved-locations/:location_id - Delete saved location
 
 ### Places of Interest
 - GET /api/places-of-interest - List all places
@@ -174,6 +188,16 @@ Copy `.env.example` to `.env` and configure:
 - PUT /api/places-of-interest/:id - Update place
 - DELETE /api/places-of-interest/:id - Remove place
 - GET /api/reports/visits?start=ISO_DATE&end=ISO_DATE - Visit analytics
+
+### Geocoding
+- GET /api/geocode?q=address - Geocode address using Nominatim service
+
+### Backup Management
+- GET /api/backups - List all backup files
+- POST /api/backups/create - Create new backup
+- POST /api/backups/restore - Restore from backup file
+- GET /api/backups/download/:filename - Download backup file
+- DELETE /api/backups/delete/:filename - Delete backup file
 
 ### Admin
 - GET /api/users - List users

@@ -37,7 +37,7 @@ The backup script automatically sends email notifications to **demo@praxisnetwor
 - If mail command is not available, the script will log a warning and continue without email
 
 **Configuration:**
-Edit `rsync-backup-remote.sh` to customize:
+Edit `scripts/backup/rsync-backup-remote.sh` to customize:
 ```bash
 EMAIL_ENABLED=true                          # Set to false to disable emails
 EMAIL_RECIPIENT="demo@praxisnetworking.com" # Change email address
@@ -46,7 +46,7 @@ EMAIL_SUBJECT_PREFIX="[GPS Tracker Backup]" # Customize subject prefix
 
 ## Scripts
 
-### 1. rsync-backup-remote.sh
+### 1. scripts/backup/rsync-backup-remote.sh
 Backs up local data to remote server.
 
 **Features:**
@@ -61,13 +61,13 @@ Backs up local data to remote server.
 **Usage:**
 ```bash
 # Run manual backup
-./rsync-backup-remote.sh
+./scripts/backup/rsync-backup-remote.sh
 
 # View backup log
 tail -f logs/rsync-backup.log
 ```
 
-### 2. rsync-restore-remote.sh
+### 2. scripts/backup/rsync-restore-remote.sh
 Restores data from remote server to local system.
 
 **Features:**
@@ -79,19 +79,19 @@ Restores data from remote server to local system.
 **Usage:**
 ```bash
 # Restore everything
-./rsync-restore-remote.sh all
+./scripts/backup/rsync-restore-remote.sh all
 
 # Restore only database backups
-./rsync-restore-remote.sh backups
+./scripts/backup/rsync-restore-remote.sh backups
 
 # Restore only logs
-./rsync-restore-remote.sh logs
+./scripts/backup/rsync-restore-remote.sh logs
 
 # List remote backups without restoring
-./rsync-restore-remote.sh list
+./scripts/backup/rsync-restore-remote.sh list
 ```
 
-### 3. setup-rsync-cron.sh
+### 3. scripts/setup/setup-rsync-cron.sh
 Interactive setup for automatic scheduled backups.
 
 **Features:**
@@ -103,7 +103,7 @@ Interactive setup for automatic scheduled backups.
 **Usage:**
 ```bash
 # Run interactive setup
-./setup-rsync-cron.sh
+./scripts/setup/setup-rsync-cron.sh
 ```
 
 **Schedule Options:**
@@ -138,7 +138,7 @@ Run a test backup to ensure everything works:
 
 ```bash
 # Run the backup script manually
-./rsync-backup-remote.sh
+./scripts/backup/rsync-backup-remote.sh
 
 # Check the output for any errors
 # Log file: logs/rsync-backup.log
@@ -162,7 +162,7 @@ Set up scheduled automatic backups:
 
 ```bash
 # Run the interactive setup
-./setup-rsync-cron.sh
+./scripts/setup/setup-rsync-cron.sh
 
 # Follow the prompts to select your preferred schedule
 ```
@@ -183,7 +183,7 @@ crontab -l
 
 # You should see an entry like:
 # Automatic remote backup to 192.168.100.74
-# 0 3 * * * /home/demo/effective-guide/rsync-backup-remote.sh >> /home/demo/effective-guide/logs/rsync-backup.log 2>&1
+# 0 3 * * * /home/demo/effective-guide/scripts/backup/rsync-backup-remote.sh >> /home/demo/effective-guide/logs/rsync-backup.log 2>&1
 ```
 
 ## Remote Server Directory Structure
@@ -223,14 +223,14 @@ ls -lh logs/rsync-backup.log
 
 ```bash
 # List what's on the remote server
-./rsync-restore-remote.sh list
+./scripts/backup/rsync-restore-remote.sh list
 ```
 
 ### Manual Backup
 
 ```bash
 # Run backup immediately (doesn't wait for cron)
-./rsync-backup-remote.sh
+./scripts/backup/rsync-backup-remote.sh
 ```
 
 ### Check Remote Disk Space
@@ -267,7 +267,7 @@ If you need to restore everything from the remote backup:
 
 ```bash
 # 1. Restore database backups and logs
-./rsync-restore-remote.sh all
+./scripts/backup/rsync-restore-remote.sh all
 
 # 2. Verify restored files
 ls -lh backups/
@@ -279,7 +279,7 @@ from app.main import restore_backup
 restore_backup('backup_YYYYMMDD_HHMMSS.sql')
 "
 # Or use the restore script:
-./restore-backup.sh --latest
+./scripts/backup/restore-backup.sh --latest
 ```
 
 ### Selective Restore
@@ -288,10 +288,10 @@ Restore only specific components:
 
 ```bash
 # Restore only database backups
-./rsync-restore-remote.sh backups
+./scripts/backup/rsync-restore-remote.sh backups
 
 # Restore only logs
-./rsync-restore-remote.sh logs
+./scripts/backup/rsync-restore-remote.sh logs
 ```
 
 ## Troubleshooting
@@ -340,12 +340,12 @@ Restore only specific components:
    ```
 4. Check script permissions:
    ```bash
-   ls -l rsync-backup-remote.sh
+   ls -l scripts/backup/rsync-backup-remote.sh
    # Should show: -rwxr-xr-x
    ```
 5. Test script manually:
    ```bash
-   ./rsync-backup-remote.sh
+   ./scripts/backup/rsync-backup-remote.sh
    ```
 
 ### Issue: Remote disk full
@@ -379,7 +379,7 @@ Restore only specific components:
    iperf3 -c 192.168.100.74
    ```
 3. Reduce rsync compression (if CPU is bottleneck):
-   Edit `rsync-backup-remote.sh` and change `-z` to `--compress-level=3`
+   Edit `scripts/backup/rsync-backup-remote.sh` and change `-z` to `--compress-level=3`
 
 ### Issue: Email notifications not being sent
 
@@ -406,7 +406,7 @@ Restore only specific components:
    tail -f /var/log/mail.log
    ```
 5. Disable email notifications if not needed:
-   Edit `rsync-backup-remote.sh` and set `EMAIL_ENABLED=false`
+   Edit `scripts/backup/rsync-backup-remote.sh` and set `EMAIL_ENABLED=false`
 
 ### Issue: Restore fails with "Operation not permitted" (rsync error code 23)
 
@@ -465,7 +465,7 @@ crontab -l | grep -v "rsync-backup-remote.sh" | crontab -
 ### Change Schedule
 ```bash
 # Option 1: Run setup again (recommended)
-./setup-rsync-cron.sh
+./scripts/setup/setup-rsync-cron.sh
 
 # Option 2: Edit manually
 crontab -e
@@ -517,7 +517,7 @@ REMOTE_USER="your_username"
 
 ### Exclude Files from Backup
 
-Edit `rsync-backup-remote.sh` and add `--exclude` options:
+Edit `scripts/backup/rsync-backup-remote.sh` and add `--exclude` options:
 ```bash
 rsync -avz \
     --delete \
@@ -575,7 +575,7 @@ All three work together for comprehensive data protection.
 ### Test Backup
 ```bash
 # 1. Run backup manually
-./rsync-backup-remote.sh
+./scripts/backup/rsync-backup-remote.sh
 
 # 2. Verify on remote
 ssh demo@192.168.100.74 "ls -lh /backup/gps-tracker/backups/ && ls -lh /backup/gps-tracker/logs/"
@@ -587,7 +587,7 @@ tail logs/rsync-backup.log
 ### Test Restore
 ```bash
 # 1. List remote backups
-./rsync-restore-remote.sh list
+./scripts/backup/rsync-restore-remote.sh list
 
 # 2. Create test directory
 mkdir -p /tmp/restore-test

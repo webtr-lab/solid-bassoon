@@ -6,14 +6,14 @@ Automated health monitoring and daily status reporting for the GPS Tracker Appli
 
 The monitoring system provides two complementary tools:
 
-### 1. Health Check (health-check.sh)
+### 1. Health Check (scripts/monitoring/health-check.sh)
 Basic health monitoring that checks:
 - **Docker Services**: backend, frontend, mobile, nominatim, database
 - **API Endpoints**: Backend API, Frontend, Mobile interface, Nominatim
 - **Database Connectivity**: PostgreSQL connection test
 - **System Resources**: Disk usage, volume sizes, log file sizes
 
-### 2. Application Status Report (app-status-report.sh) 🆕
+### 2. Application Status Report (scripts/monitoring/app-status-report.sh) 🆕
 Comprehensive daily status report with email notifications that includes:
 - All health check items above
 - **Database Statistics**: Vehicle count, user count, total locations, places of interest
@@ -25,13 +25,13 @@ Comprehensive daily status report with email notifications that includes:
 ## Files
 
 ### Health Check
-- `health-check.sh` - Basic health check script (no email)
-- `setup-health-check-cron.sh` - Cron setup for health checks
+- `scripts/monitoring/health-check.sh` - Basic health check script (no email)
+- `scripts/setup/setup-health-check-cron.sh` - Cron setup for health checks
 - `logs/health-check.log` - Health check results (auto-rotates at 10MB)
 
 ### Status Report 🆕
-- `app-status-report.sh` - Comprehensive status report with email
-- `setup-status-report-cron.sh` - Interactive cron setup for daily reports
+- `scripts/monitoring/app-status-report.sh` - Comprehensive status report with email
+- `scripts/setup/setup-status-report-cron.sh` - Interactive cron setup for daily reports
 - `logs/status-report.log` - Status report execution log
 
 ## Quick Start
@@ -41,7 +41,7 @@ Comprehensive daily status report with email notifications that includes:
 #### 1. Run Health Check Manually
 
 ```bash
-./health-check.sh
+./scripts/monitoring/health-check.sh
 ```
 
 This will check all services and output results to both console and `logs/health-check.log`.
@@ -49,7 +49,7 @@ This will check all services and output results to both console and `logs/health
 #### 2. Setup Daily Automated Checks
 
 ```bash
-./setup-health-check-cron.sh
+./scripts/setup/setup-health-check-cron.sh
 ```
 
 This configures a cron job to run the health check daily at 2:00 AM.
@@ -79,10 +79,10 @@ grep "Overall Status" logs/health-check.log
 
 ```bash
 # Run with email notification
-./app-status-report.sh
+./scripts/monitoring/app-status-report.sh
 
 # Run without email (test mode)
-./app-status-report.sh --no-email
+./scripts/monitoring/app-status-report.sh --no-email
 ```
 
 The report includes comprehensive statistics and is sent to **demo@praxisnetworking.com**.
@@ -90,7 +90,7 @@ The report includes comprehensive statistics and is sent to **demo@praxisnetwork
 #### 2. Setup Daily Automated Reports
 
 ```bash
-./setup-status-report-cron.sh
+./scripts/setup/setup-status-report-cron.sh
 ```
 
 Interactive setup with schedule options:
@@ -117,10 +117,10 @@ During installation, select "Internet Site" and configure with your domain.
 echo "Test message" | mail -s "Test Subject" info@praxisnetworking.com
 
 # Run status report without email first
-./app-status-report.sh --no-email
+./scripts/monitoring/app-status-report.sh --no-email
 
 # Then run with email
-./app-status-report.sh
+./scripts/monitoring/app-status-report.sh
 ```
 
 #### 5. View Status Report Logs
@@ -276,7 +276,7 @@ Examples:
 
 ### Configure Status Report Email 🆕
 
-Edit `app-status-report.sh` to customize email settings:
+Edit `scripts/monitoring/app-status-report.sh` to customize email settings:
 
 ```bash
 # Email configuration
@@ -293,7 +293,7 @@ EMAIL_RECIPIENT="info@praxisnetworking.com,admin@example.com"
 
 ### Modify Checks
 
-Edit `health-check.sh` or `app-status-report.sh` to:
+Edit `scripts/monitoring/health-check.sh` or `scripts/monitoring/app-status-report.sh` to:
 - Add custom service checks
 - Adjust thresholds (disk usage, log sizes, error counts)
 - Modify warning/critical levels
@@ -303,7 +303,7 @@ Edit `health-check.sh` or `app-status-report.sh` to:
 
 ```bash
 # Check status and send alert if critical
-./health-check.sh
+./scripts/monitoring/health-check.sh
 if [ $? -eq 2 ]; then
     # Send alert via your preferred method
     echo "Critical system failure!" | mail -s "GPS Tracker Alert" admin@example.com
@@ -330,7 +330,7 @@ crontab -l | grep health-check
 
 ```bash
 # Ensure scripts are executable
-chmod +x health-check.sh setup-health-check-cron.sh
+chmod +x scripts/monitoring/health-check.sh scripts/setup/setup-health-check-cron.sh
 
 # Ensure logs directory is writable
 mkdir -p logs
@@ -403,7 +403,7 @@ sudo usermod -aG docker $USER
 8. **Disable emails temporarily**:
    ```bash
    # Run report without email
-   ./app-status-report.sh --no-email
+   ./scripts/monitoring/app-status-report.sh --no-email
 
    # Or edit the script
    # Change: EMAIL_ENABLED=true
@@ -419,7 +419,7 @@ logs/health-check.log                    # Current log
 logs/health-check.log.20251030-020001   # Rotated log
 ```
 
-To adjust rotation settings, modify the `MAX_LOG_SIZE` variable in `health-check.sh`.
+To adjust rotation settings, modify the `MAX_LOG_SIZE` variable in `scripts/monitoring/health-check.sh`.
 
 ## Monitoring Best Practices
 

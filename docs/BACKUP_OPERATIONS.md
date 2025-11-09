@@ -83,13 +83,13 @@ This file (BACKUP_OPERATIONS.md) provides a quick overview. For detailed informa
 
 ```bash
 # Auto-decide (full on Sunday, daily otherwise)
-./backup-manager.sh --auto
+./scripts/backup/backup-manager.sh --auto
 
 # Force full backup
-./backup-manager.sh --full
+./scripts/backup/backup-manager.sh --full
 
 # Force daily backup
-./backup-manager.sh --daily
+./scripts/backup/backup-manager.sh --daily
 ```
 
 #### **Method 2: Using Docker Command (Legacy)**
@@ -128,16 +128,16 @@ docker compose exec db pg_dump \
 
 ```bash
 # Interactive mode (easiest)
-./restore-backup.sh --interactive
+./scripts/backup/restore-backup.sh --interactive
 
 # Restore from latest backup
-./restore-backup.sh --latest
+./scripts/backup/restore-backup.sh --latest
 
 # Restore from specific date
-./restore-backup.sh --date 2025-11-01
+./scripts/backup/restore-backup.sh --date 2025-11-01
 
 # Restore from specific file
-./restore-backup.sh --file backups/full/2025/11/03/backup_full_20251103_020000.sql
+./scripts/backup/restore-backup.sh --file backups/full/2025/11/03/backup_full_20251103_020000.sql
 ```
 
 **Features**:
@@ -152,7 +152,7 @@ docker compose exec db pg_dump \
 
 ```bash
 # List available backups
-./backup-manager.sh --list
+./scripts/backup/backup-manager.sh --list
 
 # Restore from backup
 docker compose exec db pg_restore \
@@ -431,7 +431,7 @@ tail -50 logs/status-report.log
 
 ```bash
 # Quick verification
-./verify-backup.sh $(ls -t backups/backup_*.sql | head -1 | xargs basename)
+./scripts/backup/verify-backup.sh $(ls -t backups/backup_*.sql | head -1 | xargs basename)
 ```
 
 ### **Check Remote Backup Sync**

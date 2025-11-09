@@ -39,7 +39,7 @@ Run the setup script to download Suriname OSM data from Geofabrik:
 
 ```bash
 chmod +x setup-nominatim.sh
-./setup-nominatim.sh
+./scripts/setup/setup-nominatim.sh
 ```
 
 This downloads `suriname-latest.osm.pbf` (~15MB compressed) to the `nominatim-data/` directory.

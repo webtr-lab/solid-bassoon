@@ -66,7 +66,7 @@ Create the organized folder structure:
 
 ```bash
 # Initialize the new backup directory structure
-./backup-manager.sh --help
+./scripts/backup/backup-manager.sh --help
 
 # The structure will be auto-created on first backup
 # Or create manually:
@@ -79,13 +79,13 @@ Create a test backup to verify the system works:
 
 ```bash
 # Create a manual backup (will auto-decide based on day of week)
-./backup-manager.sh --auto
+./scripts/backup/backup-manager.sh --auto
 
 # OR force a full backup for testing
-./backup-manager.sh --full
+./scripts/backup/backup-manager.sh --full
 
 # Verify backup was created
-./backup-manager.sh --list
+./scripts/backup/backup-manager.sh --list
 ```
 
 Expected output:
@@ -127,10 +127,10 @@ Test the restore process in a safe way:
 
 ```bash
 # List available backups
-./restore-backup.sh --list
+./scripts/backup/restore-backup.sh --list
 
 # Test restore (WILL PROMPT FOR CONFIRMATION)
-./restore-backup.sh --latest
+./scripts/backup/restore-backup.sh --latest
 
 # This will:
 # 1. Validate the backup
@@ -172,7 +172,7 @@ with app.app_context():
 "
 
 # Verify backup was created
-./backup-manager.sh --list
+./scripts/backup/backup-manager.sh --list
 ```
 
 ### Step 8: Test Remote Sync
@@ -181,7 +181,7 @@ Sync backups to remote server:
 
 ```bash
 # Run remote sync
-./rsync-backup-remote.sh
+./scripts/backup/rsync-backup-remote.sh
 
 # Check logs
 tail -50 logs/rsync-backup.log
@@ -195,7 +195,7 @@ ssh demo@192.168.100.74 "ls -lh ~/gps-tracker-backup/backups/full/2025/11/"
 Run the status report to ensure it recognizes the new structure:
 
 ```bash
-./app-status-report.sh --no-email
+./scripts/monitoring/app-status-report.sh --no-email
 
 # Check for backup status in output
 # Should show something like:
@@ -309,10 +309,10 @@ Email notifications are automatically sent for:
 
 ```bash
 # Check backup status
-./app-status-report.sh --no-email | grep -A 5 "Backups:"
+./scripts/monitoring/app-status-report.sh --no-email | grep -A 5 "Backups:"
 
 # Check backup count
-./backup-manager.sh --list | grep "STATISTICS" -A 3
+./scripts/backup/backup-manager.sh --list | grep "STATISTICS" -A 3
 
 # Check latest backup age
 LATEST=$(find backups/full backups/daily -name "backup_*.sql*" -type f -printf '%T+ %p\n' | sort -r | head -1)
@@ -371,7 +371,7 @@ docker compose restart backend
 
 ### Backup Creation Fails
 
-**Problem**: `./backup-manager.sh --auto` fails
+**Problem**: `./scripts/backup/backup-manager.sh --auto` fails
 
 **Solution**:
 ```bash
@@ -401,12 +401,12 @@ which python3
 python3 -c "import json; print('OK')"
 
 # Run backup with verbose output
-./backup-manager.sh --full 2>&1 | tee /tmp/backup-debug.log
+./scripts/backup/backup-manager.sh --full 2>&1 | tee /tmp/backup-debug.log
 ```
 
 ### Remote Sync Fails
 
-**Problem**: `./rsync-backup-remote.sh` fails
+**Problem**: `./scripts/backup/rsync-backup-remote.sh` fails
 
 **Solution**:
 ```bash
@@ -425,7 +425,7 @@ rsync -avz --dry-run backups/full/ demo@192.168.100.74:~/gps-tracker-backup/back
 
 ### Restore Fails
 
-**Problem**: `./restore-backup.sh --latest` fails
+**Problem**: `./scripts/backup/restore-backup.sh --latest` fails
 
 **Solution**:
 ```bash
@@ -433,7 +433,7 @@ rsync -avz --dry-run backups/full/ demo@192.168.100.74:~/gps-tracker-backup/back
 tail -100 logs/restore.log
 
 # Verify backup is valid
-./verify-backup.sh <backup-file>
+./scripts/backup/verify-backup.sh <backup-file>
 
 # Check database is running
 docker compose ps db
@@ -456,28 +456,28 @@ docker compose exec db pg_restore --list /backups/full/YYYY/MM/DD/backup_full_*.
 
 ```bash
 # Backup operations
-./backup-manager.sh --help
-./backup-manager.sh --list
-./backup-manager.sh --auto
-./backup-manager.sh --full
-./backup-manager.sh --cleanup
-./backup-manager.sh --archive
+./scripts/backup/backup-manager.sh --help
+./scripts/backup/backup-manager.sh --list
+./scripts/backup/backup-manager.sh --auto
+./scripts/backup/backup-manager.sh --full
+./scripts/backup/backup-manager.sh --cleanup
+./scripts/backup/backup-manager.sh --archive
 
 # Restore operations
-./restore-backup.sh --help
-./restore-backup.sh --list
-./restore-backup.sh --latest
-./restore-backup.sh --date YYYY-MM-DD
-./restore-backup.sh --interactive
+./scripts/backup/restore-backup.sh --help
+./scripts/backup/restore-backup.sh --list
+./scripts/backup/restore-backup.sh --latest
+./scripts/backup/restore-backup.sh --date YYYY-MM-DD
+./scripts/backup/restore-backup.sh --interactive
 
 # Monitoring
-./app-status-report.sh
-./backup-manager.sh --list
+./scripts/monitoring/app-status-report.sh
+./scripts/backup/backup-manager.sh --list
 tail -f logs/backup-manager.log
 tail -f logs/restore.log
 
 # Remote sync
-./rsync-backup-remote.sh
+./scripts/backup/rsync-backup-remote.sh
 tail -f logs/rsync-backup.log
 ```
 

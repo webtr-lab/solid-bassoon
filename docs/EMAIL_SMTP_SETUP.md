@@ -21,7 +21,7 @@ The configuration script will automatically:
 - Test the configuration
 
 ```bash
-sudo ./configure-email-smtp.sh
+sudo ./scripts/email/configure-email-smtp.sh
 ```
 
 **Note**: This script must be run with `sudo` as it modifies system postfix configuration.
@@ -48,10 +48,10 @@ Test all notification systems:
 
 ```bash
 # Test status report
-./app-status-report.sh
+./scripts/monitoring/app-status-report.sh
 
 # Test backup notification
-./rsync-backup-remote.sh
+./scripts/backup/rsync-backup-remote.sh
 
 # Simple test email
 echo "Test from configured SMTP" | mail -s "SMTP Test" info@praxisnetworking.com
@@ -114,7 +114,7 @@ echo "Test message body" | mail -s "Test Subject" info@praxisnetworking.com
 ### Test 2: Status Report Test
 
 ```bash
-./app-status-report.sh
+./scripts/monitoring/app-status-report.sh
 ```
 
 **Expected**:
@@ -125,7 +125,7 @@ echo "Test message body" | mail -s "Test Subject" info@praxisnetworking.com
 ### Test 3: Backup Notification Test
 
 ```bash
-./rsync-backup-remote.sh
+./scripts/backup/rsync-backup-remote.sh
 ```
 
 **Expected**:
@@ -298,7 +298,7 @@ sudo systemctl restart postfix
 **Recommended**: After configuration is complete and tested:
 ```bash
 # Securely delete the configuration script
-shred -u configure-email-smtp.sh
+shred -u scripts/email/configure-email-smtp.sh
 ```
 
 ### Network Security
@@ -323,8 +323,8 @@ shred -u configure-email-smtp.sh
 
 2. **Monthly**: Verify email notifications are working
    ```bash
-   ./app-status-report.sh --no-email  # Check status
-   ./app-status-report.sh              # Send test email
+   ./scripts/monitoring/app-status-report.sh --no-email  # Check status
+   ./scripts/monitoring/app-status-report.sh              # Send test email
    ```
 
 3. **Quarterly**: Test backup of postfix configuration
