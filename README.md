@@ -83,28 +83,37 @@ This will start all services:
 - React frontend (port 80/443)
 - Mobile interface (port 8080/8443)
 
-4. **Get initial admin credentials**
+4. **Default admin credentials**
 
-On first startup, the application automatically creates an admin user with a random password. To retrieve the credentials:
+On first startup, the application automatically creates an admin user with default credentials:
 
+```
+Username: admin
+Password: admin123
+```
+
+**IMPORTANT SECURITY NOTE**:
+- You will be prompted to change this password on first login
+- Always change the default password immediately in production environments
+- The default credentials are shown in the backend logs for convenience
+
+You can verify the account was created by checking the logs:
 ```bash
 docker compose logs backend | grep -A 5 "IMPORTANT"
 ```
-
-You'll see output like:
-```
-IMPORTANT: Admin user created!
-Username: admin
-Password: <randomly-generated-password>
-Please change this password after first login.
-```
-
-**Save these credentials** - you'll need them to log in.
 
 5. **Access the application**
 - Frontend Dashboard: http://localhost (or http://localhost:3000 in dev mode)
 - Mobile GPS Sender: http://localhost:8080
 - Backend API: http://localhost:5000
+- Nominatim Geocoding: http://localhost:8081
+
+**Note**: The Nominatim service may take 5-10 minutes to initialize on first startup as it imports map data. Check readiness:
+```bash
+docker compose logs nominatim -f
+```
+
+Wait for the message "Nominatim is ready" before using geocoding features. See [docs/NOMINATIM_SETUP.md](docs/NOMINATIM_SETUP.md) for detailed configuration.
 
 6. **First Login and Setup**
 
@@ -152,6 +161,26 @@ sudo ufw allow 8443/tcp
 # Backend API (only if accessing directly)
 sudo ufw allow 5000/tcp
 ```
+
+## Directory Organization
+
+The codebase is organized into logical directories for easy navigation:
+
+- **`scripts/`** - All operational scripts organized by function
+  - `backup/` - Backup, restore, and verification scripts
+  - `monitoring/` - Health checks and status reporting
+  - `email/` - Email configuration and notifications
+  - `setup/` - Setup scripts for cron jobs and services
+
+- **`docs/`** - Feature documentation (backup, email, health monitoring, etc.)
+
+- **`config/`** - System configuration files (logrotate, etc.)
+
+- **`logs/`** - Application logs (auto-rotated)
+
+- **`backups/`** - Database backup storage
+
+Each directory contains a README with detailed information about its contents.
 
 ## Development
 
@@ -206,8 +235,23 @@ See [CLAUDE.md](CLAUDE.md) for detailed API endpoints and architecture documenta
 │   └── package.json
 ├── mobile/              # Mobile GPS sender interface
 │   └── index.html       # Standalone HTML app
+├── scripts/             # Operational scripts
+│   ├── backup/          # Backup and restore scripts
+│   ├── monitoring/      # Health checks and status reports
+│   ├── email/           # Email configuration
+│   └── setup/           # Setup and cron configuration
+├── docs/                # Feature documentation
+│   ├── BACKUP_*.md      # Backup system docs
+│   ├── EMAIL_*.md       # Email system docs
+│   ├── HEALTH_CHECK.md  # Monitoring docs
+│   └── ...             # Other documentation
+├── config/              # Configuration files
+│   └── logrotate.conf   # Log rotation config
+├── logs/                # Application logs
+├── backups/             # Database backups
 ├── docker-compose.yml   # Docker orchestration
-└── CLAUDE.md           # Detailed documentation
+├── CLAUDE.md           # Developer documentation
+└── README.md           # This file
 ```
 
 ## Troubleshooting
@@ -304,40 +348,48 @@ The application provides **two backup systems**:
 
 ### Application-Level Backups
 
-The backend automatically creates backups:
-- **On Startup**: Creates a backup every time the backend starts
-- **Scheduled**: Daily at 2:00 AM UTC (configurable)
-- **Manual**: Via Admin Dashboard → Backups tab
+The backend automatically creates backups using the organized backup manager system:
+- **Scheduled**: Daily at 2:00 AM (full backup on Sundays, daily backup on other days)
+- **Manual**: Via Admin Dashboard → Backups tab or command line tools
 
 **Naming Convention**:
-- Automatic: `backup_YYYYMMDD_HHMMSS.sql`
+- Full backups: `backup_full_YYYYMMDD_HHMMSS.sql`
+- Daily backups: `backup_daily_YYYYMMDD_HHMMSS.sql`
 - Manual: `manual_<custom_name>.sql`
 
-**Retention**: Keeps last 10 automatic backups
+**Retention**: 180 days (6 months) with automatic cleanup and compression after 30 days
 
 ### Server-Level Backups (Recommended)
 
-For production environments, use the dedicated backup scripts:
+For production environments, use the backup manager with organized retention:
 
 **Quick Start:**
 ```bash
-# Create a backup now
-./backup-server.sh
+# Create a full backup now
+./scripts/backup/backup-manager.sh --full
 
-# Create a backup with custom name
-./backup-server.sh pre_upgrade
+# Create a daily backup
+./scripts/backup/backup-manager.sh --daily
 
-# Set up automated backups with cron
-./setup-cron-backup.sh
+# Auto-decide (full on Sunday, daily otherwise)
+./scripts/backup/backup-manager.sh --auto
+
+# List all backups
+./scripts/backup/backup-manager.sh --list
 ```
 
 **Features:**
-- Independent of application (more reliable)
-- Custom naming to differentiate from app backups
-- Automatic cleanup (keeps last 20, removes >30 days old)
-- Logging to `backup-server.log`
+- Weekly full backups (Sundays) + daily incremental-style backups
+- Date-organized folder structure (YYYY/MM/DD)
+- Metadata tracking with JSON files
+- MD5 checksum verification
+- Auto-compression for backups >30 days old
+- 6-month retention (180 days)
+- Backup index for fast restore
 
-**Naming Convention**: `server_backup_YYYYMMDD_HHMMSS.sql`
+**Naming Convention**:
+- Full: `backup_full_YYYYMMDD_HHMMSS.sql`
+- Daily: `backup_daily_YYYYMMDD_HHMMSS.sql`
 
 ### Manual Backup (Direct Database)
 
@@ -349,25 +401,30 @@ docker compose exec db pg_dump -U gpsadmin gps_tracker > backup_$(date +%Y%m%d_%
 
 **Using Restore Script (Recommended):**
 ```bash
+# Restore from latest backup
+./scripts/backup/restore-backup.sh --latest
+
+# Restore from specific date
+./scripts/backup/restore-backup.sh --date 2025-11-01
+
+# Restore from specific file
+./scripts/backup/restore-backup.sh --file backup_full_20251101_020000.sql
+
 # Interactive mode - choose from list
-./restore-server.sh
-
-# Restore specific backup
-./restore-server.sh server_backup_20251030_030000.sql
-
-# Restore latest backup
-./restore-server.sh --latest
+./scripts/backup/restore-backup.sh --interactive
 
 # List available backups
-./restore-server.sh --list
+./scripts/backup/restore-backup.sh --list
 ```
 
 **Features:**
-- Lists all available backups with details
-- Creates automatic pre-restore backup for safety
-- Validates backup file before restore
-- Requires explicit "yes" confirmation
-- Restarts backend after restore
+- Auto-finds latest backup in organized structure
+- Supports date-based restore (restore to specific date)
+- Handles compressed (.gz) backups automatically
+- Creates automatic safety backup before restore
+- Validates backup integrity before restore
+- Email notifications
+- Requires explicit confirmation
 
 **Manual Restore (Direct Database):**
 ```bash
@@ -380,6 +437,37 @@ docker compose exec -T db psql -U gpsadmin gps_tracker < backup_file.sql
 3. Confirm the action
 
 **⚠️ Warning**: Restore will overwrite all current data!
+
+### Remote Backup (Off-site)
+
+For disaster recovery, the application supports automated remote backups via rsync to a remote server.
+
+**Quick Start:**
+```bash
+# Test SSH connection to remote server
+ssh demo@192.168.100.74
+
+# Run manual backup to remote server
+./scripts/backup/rsync-backup-remote.sh
+
+# Set up automatic remote backups with cron
+./scripts/setup/setup-rsync-cron.sh
+
+# Restore from remote server
+./scripts/backup/rsync-restore-remote.sh all
+
+# List remote backups
+./scripts/backup/rsync-restore-remote.sh list
+```
+
+**Features:**
+- Syncs both database backups and logs to remote server (192.168.100.74)
+- Incremental transfers (only changed files)
+- Configurable schedule (every 6h, 12h, daily, custom)
+- Easy disaster recovery
+- Progress reporting and detailed logging
+
+See [docs/REMOTE_BACKUP.md](docs/REMOTE_BACKUP.md) for complete documentation.
 
 ### Permissions Note
 
@@ -394,6 +482,37 @@ sudo chown -R $USER:$USER backups/
 - **Admin**: Full access to all features
 - **Manager**: Access to tracking and admin panel
 - **Viewer**: Read-only access to tracking view
+
+## Health Monitoring
+
+The application includes automated health check monitoring to ensure all services are running properly.
+
+**Quick Start:**
+```bash
+# Run manual health check
+./scripts/monitoring/health-check.sh
+
+# Set up daily automated checks
+./scripts/setup/setup-health-check-cron.sh
+
+# View health check logs
+tail -f logs/health-check.log
+```
+
+**What it checks:**
+- Docker container status (backend, frontend, mobile, nominatim, database)
+- API endpoint responsiveness
+- Database connectivity
+- Disk usage and volume sizes
+- Log file growth
+
+**Features:**
+- Automatic log rotation (10MB limit)
+- Exit codes for integration with monitoring tools
+- Detailed status reports with timestamps
+- Configurable cron schedule (default: daily at 2:00 AM)
+
+See [docs/HEALTH_CHECK.md](docs/HEALTH_CHECK.md) for complete documentation.
 
 ## License
 

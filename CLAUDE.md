@@ -16,18 +16,18 @@ This is a GPS tracking application with real-time vehicle monitoring, location h
    - Flask-Login for session-based authentication
    - Automatic stop detection when vehicles are stationary for 5+ minutes within 50m radius
 
-2. **Frontend** (React + Vite) - Port 3000
+2. **Frontend** (React + Vite) - Port 3000 (dev) / 80 & 443 (production)
    - Real-time tracking dashboard with Leaflet maps
    - Two main views: Tracking and Admin (role-based)
    - Auto-refreshes vehicle data every 5 seconds, history every 10 seconds
    - TailwindCSS for styling
    - Built-in location search with client-side caching (50 entries)
 
-3. **Mobile** (Static HTML) - Port 8080
+3. **Mobile** (Static HTML) - Port 8080 (HTTP) / 8443 (HTTPS)
    - Simple interface for GPS-enabled devices to submit location data
    - Served via nginx
 
-4. **Nominatim** (Geocoding Service) - Port 8081
+4. **Nominatim** (Geocoding Service) - Port 8081 (external) / 8080 (internal)
    - Local OpenStreetMap Nominatim instance with Suriname map data
    - Provides instant address/location search without rate limits
    - ~350MB storage (OSM data + database)
@@ -44,10 +44,10 @@ This is a GPS tracking application with real-time vehicle monitoring, location h
 
 ### Key Backend Features
 
-- **Stop Detection** (main.py:145): Automatically saves locations when vehicle stays within 50m for 5+ minutes
-- **Distance Calculation** (main.py:182): Haversine formula for precise GPS distance
-- **Visit Reports** (/api/reports/visits): Matches saved locations to places of interest within 200m threshold
-- **Geocoding** (/api/geocode): Uses local Nominatim instance for instant address lookup (configurable via NOMINATIM_URL)
+- **Stop Detection** (`detect_and_save_stops()` in main.py): Automatically saves locations when vehicle stays within 50m for 5+ minutes
+- **Distance Calculation** (`calculate_distance()` in main.py): Haversine formula for precise GPS distance
+- **Visit Reports** (`/api/reports/visits` endpoint): Matches saved locations to places of interest within 200m threshold
+- **Geocoding** (`/api/geocode` endpoint): Uses local Nominatim instance for instant address lookup (configurable via NOMINATIM_URL)
 
 ### Frontend State Management
 
@@ -79,6 +79,31 @@ python -m flask --app app.main:app run --host=0.0.0.0 --port=5000
 # Database is auto-created on first run with a random admin password
 # Check the backend logs for the generated admin credentials
 ```
+
+### Logging
+
+Application logs are persisted to the `logs/` directory:
+- **logs/app.log** - General application logs (startup, database, GPS events, backups)
+- **logs/error.log** - Errors only
+- **logs/access.log** - HTTP request/response logs
+
+Each log file auto-rotates at 10MB, keeping 10 backup files (100MB total per log type).
+
+```bash
+# View live logs
+tail -f logs/app.log
+
+# View errors
+grep "ERROR" logs/error.log
+
+# View GPS submissions
+grep "api/gps" logs/access.log
+
+# View stop detections
+grep "Auto-detected stop" logs/app.log
+```
+
+See **LOGGING.md** for complete logging documentation.
 
 ### Frontend
 
@@ -165,6 +190,7 @@ Copy `.env.example` to `.env` and configure:
 - **AdminPanel.jsx**: User and vehicle management (tabs-based UI)
 - **PlacesList.jsx**: Shows places of interest when no vehicle selected
 - **Login.jsx**: Authentication form
+- **ChangePasswordModal.jsx**: Modal dialog for changing user passwords (shown on first login for default admin)
 
 ## Key Implementation Details
 

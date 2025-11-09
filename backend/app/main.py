@@ -4,6 +4,7 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from flask_bcrypt import Bcrypt
 from app.config import Config
 from app.models import db, Vehicle, Location, SavedLocation, User, PlaceOfInterest
+from app.logging_config import setup_logging
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import math
@@ -13,6 +14,9 @@ import glob
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# Initialize logging system
+access_logger = setup_logging(app)
 
 # Get CORS origins from environment variable or use defaults
 cors_origins = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')
@@ -32,6 +36,18 @@ login_manager.login_view = 'login'
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# HTTP request logging middleware
+@app.before_request
+def log_request():
+    """Log incoming HTTP requests"""
+    access_logger.info(f"{request.method} {request.path} - IP: {request.remote_addr}")
+
+@app.after_request
+def log_response(response):
+    """Log HTTP responses"""
+    access_logger.info(f"{request.method} {request.path} - Status: {response.status_code}")
+    return response
+
 with app.app_context():
     db.create_all()
     
@@ -40,7 +56,7 @@ with app.app_context():
             vehicle = Vehicle(name=f'Vehicle {i}', device_id=f'device_{i}')
             db.session.add(vehicle)
         db.session.commit()
-        print("Created 5 default vehicles")
+        app.logger.info("Created 5 default vehicles")
     
     if User.query.count() == 0:
         # Create default admin user with admin/admin123
@@ -55,12 +71,12 @@ with app.app_context():
         )
         db.session.add(admin_user)
         db.session.commit()
-        print("="*60)
-        print("IMPORTANT: Default admin user created")
-        print(f"Username: admin")
-        print(f"Password: {default_password}")
-        print("This user will be prompted to change password on first login")
-        print("="*60)
+        app.logger.warning("="*60)
+        app.logger.warning("IMPORTANT: Default admin user created")
+        app.logger.warning(f"Username: admin")
+        app.logger.warning(f"Password: {default_password}")
+        app.logger.warning("This user will be prompted to change password on first login")
+        app.logger.warning("="*60)
 
 @app.route('/api/health', methods=['GET'])
 def health():
@@ -224,6 +240,7 @@ def detect_and_save_stops(vehicle_id, current_location):
                     timestamp=first_loc.timestamp
                 )
                 db.session.add(saved_loc)
+                app.logger.info(f"Auto-detected stop for vehicle_id={vehicle_id}, duration={int(time_diff)}min, location=({current_location.latitude:.6f}, {current_location.longitude:.6f})")
 
 def calculate_distance(lat1, lon1, lat2, lon2):
     R = 6371
@@ -810,7 +827,7 @@ def geocode_address():
                f'viewbox={viewbox}&'
                f'bounded=0')  # Don't restrict to viewbox, just bias results
 
-        print(f"[GEOCODE] Requesting: {url}", flush=True)
+        app.logger.info(f"[GEOCODE] Requesting: {url}")
 
         req = urllib.request.Request(url)
         # Nominatim requires a valid User-Agent
@@ -820,10 +837,10 @@ def geocode_address():
 
         with urllib.request.urlopen(req, timeout=10) as response:
             response_text = response.read().decode()
-            print(f"[GEOCODE] Response status: {response.status}", flush=True)
+            app.logger.info(f"[GEOCODE] Response status: {response.status}")
             data = json.loads(response_text)
 
-        print(f"[GEOCODE] Found {len(data)} results from {nominatim_url}", flush=True)
+        app.logger.info(f"[GEOCODE] Found {len(data)} results from {nominatim_url}")
 
         results = [{
             'name': item.get('display_name', ''),
@@ -837,24 +854,88 @@ def geocode_address():
 
     except urllib.error.HTTPError as e:
         error_msg = f"HTTP Error {e.code}: {e.reason}"
-        print(f"[GEOCODE ERROR] {error_msg}", flush=True)
+        app.logger.error(f"[GEOCODE ERROR] {error_msg}")
         if 'nominatim.openstreetmap.org' in nominatim_url:
-            print(f"[GEOCODE ERROR] This usually means Nominatim is blocking requests. Consider using a local Nominatim instance.", flush=True)
+            app.logger.error(f"[GEOCODE ERROR] This usually means Nominatim is blocking requests. Consider using a local Nominatim instance.")
         return jsonify({'error': error_msg}), 500
     except urllib.error.URLError as e:
         error_msg = f"URL Error: {e.reason}"
-        print(f"[GEOCODE ERROR] {error_msg}", flush=True)
-        print(f"[GEOCODE ERROR] Is the Nominatim service running? Check: docker compose logs nominatim", flush=True)
+        app.logger.error(f"[GEOCODE ERROR] {error_msg}")
+        app.logger.error(f"[GEOCODE ERROR] Is the Nominatim service running? Check: docker compose logs nominatim")
         return jsonify({'error': error_msg}), 500
     except Exception as e:
         error_msg = str(e)
-        print(f"[GEOCODE ERROR] {error_msg}", flush=True)
-        print(f"[GEOCODE ERROR] Traceback: {traceback.format_exc()}", flush=True)
+        app.logger.error(f"[GEOCODE ERROR] {error_msg}")
+        app.logger.error(f"[GEOCODE ERROR] Traceback: {traceback.format_exc()}")
         return jsonify({'error': error_msg}), 500
 
 # Backup/Restore functionality
 BACKUP_DIR = '/app/backups'
 os.makedirs(BACKUP_DIR, exist_ok=True)
+
+def verify_backup(backup_filename):
+    """Verify backup integrity using multiple checks"""
+    try:
+        backup_path = os.path.join(BACKUP_DIR, backup_filename)
+
+        # Check 1: File exists and has reasonable size
+        if not os.path.exists(backup_path):
+            return {'valid': False, 'error': 'Backup file not found'}
+
+        size = os.path.getsize(backup_path)
+        if size < 10240:  # Less than 10KB
+            return {'valid': False, 'error': f'Backup file too small: {size} bytes'}
+
+        # Check 2: Validate PostgreSQL format using pg_restore --list
+        db_url = app.config['SQLALCHEMY_DATABASE_URI']
+        import urllib.parse
+        parsed = urllib.parse.urlparse(db_url)
+
+        env = os.environ.copy()
+        env['PGPASSWORD'] = urllib.parse.unquote(parsed.password)
+
+        cmd = [
+            'pg_restore',
+            '--list',
+            backup_path
+        ]
+
+        result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            return {'valid': False, 'error': f'Invalid PostgreSQL format: {result.stderr[:200]}'}
+
+        # Check 3: Verify table count
+        table_count = result.stdout.count('TABLE DATA')
+        if table_count < 5:  # Expect at least 5 tables
+            return {'valid': False, 'error': f'Only {table_count} tables found (expected 5+)'}
+
+        # Check 4: Generate and store MD5 checksum
+        import hashlib
+        md5_hash = hashlib.md5()
+        with open(backup_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                md5_hash.update(chunk)
+        checksum = md5_hash.hexdigest()
+
+        # Save checksum to file
+        checksum_file = f'{backup_path}.md5'
+        with open(checksum_file, 'w') as f:
+            f.write(f'{checksum}  {backup_filename}\n')
+
+        app.logger.info(f"Backup verification passed: {backup_filename}")
+        app.logger.info(f"  Size: {size} bytes, Tables: {table_count}, Checksum: {checksum}")
+
+        return {
+            'valid': True,
+            'size': size,
+            'table_count': table_count,
+            'checksum': checksum
+        }
+
+    except Exception as e:
+        app.logger.error(f"Backup verification error: {str(e)}")
+        return {'valid': False, 'error': str(e)}
 
 def create_backup(backup_name=None):
     """Create a database backup using pg_dump"""
@@ -895,14 +976,30 @@ def create_backup(backup_name=None):
         # Get file size
         size = os.path.getsize(backup_path)
 
+        # Verify backup integrity immediately after creation
+        app.logger.info(f"Verifying backup integrity: {backup_name}")
+        verification = verify_backup(backup_name)
+
+        if not verification['valid']:
+            error_msg = f"Backup verification failed: {verification['error']}"
+            app.logger.error(error_msg)
+            # Delete invalid backup
+            if os.path.exists(backup_path):
+                os.remove(backup_path)
+            raise Exception(error_msg)
+
+        app.logger.info(f"Backup created and verified successfully: {backup_name}")
+
         return {
             'filename': backup_name,
             'path': backup_path,
             'size': size,
-            'created_at': datetime.now().isoformat()
+            'created_at': datetime.now().isoformat(),
+            'verified': True,
+            'checksum': verification.get('checksum')
         }
     except Exception as e:
-        print(f"Backup error: {str(e)}")
+        app.logger.error(f"Backup error: {str(e)}")
         raise
 
 def restore_backup(backup_filename):
@@ -930,7 +1027,7 @@ def restore_backup(backup_filename):
             except:
                 pass
 
-        print(f"Starting restore from {backup_filename}...")
+        app.logger.info(f"Starting restore from {backup_filename}...")
 
         # Run pg_restore with clean option and verbose output
         cmd = [
@@ -949,10 +1046,10 @@ def restore_backup(backup_filename):
 
         # Log output for debugging
         if result.stdout:
-            print(f"pg_restore output: {result.stdout[:500]}")
+            app.logger.info(f"pg_restore output: {result.stdout[:500]}")
         if result.stderr:
             # pg_restore outputs warnings to stderr even on success
-            print(f"pg_restore stderr: {result.stderr[:500]}")
+            app.logger.info(f"pg_restore stderr: {result.stderr[:500]}")
 
         # Check for actual errors (not warnings)
         if result.returncode != 0:
@@ -960,51 +1057,152 @@ def restore_backup(backup_filename):
             if 'FATAL' in result.stderr or 'could not connect' in result.stderr.lower():
                 raise Exception(f"pg_restore failed with critical error: {result.stderr}")
             else:
-                print(f"pg_restore completed with warnings (return code {result.returncode})")
+                app.logger.warning(f"pg_restore completed with warnings (return code {result.returncode})")
 
-        print("Restore completed successfully")
+        app.logger.info("Restore completed successfully")
         return True
     except subprocess.TimeoutExpired:
-        print("Restore operation timed out after 300 seconds")
+        app.logger.error("Restore operation timed out after 300 seconds")
         raise Exception("Restore operation timed out. The backup file may be too large.")
     except Exception as e:
         error_msg = str(e)
-        print(f"Restore error: {error_msg}")
+        app.logger.error(f"Restore error: {error_msg}")
         raise Exception(f"Restore failed: {error_msg}")
 
 def automatic_backup():
-    """Scheduled automatic backup"""
+    """Scheduled automatic backup using new organized backup structure"""
     try:
-        print("Running automatic backup...")
-        backup_info = create_backup()
-        print(f"Automatic backup created: {backup_info['filename']}")
+        app.logger.info("Running automatic backup with new backup manager...")
 
-        # Keep only last 10 automatic backups
-        backups = sorted(glob.glob(os.path.join(BACKUP_DIR, 'backup_*.sql')))
-        if len(backups) > 10:
-            for old_backup in backups[:-10]:
-                os.remove(old_backup)
-                print(f"Removed old backup: {os.path.basename(old_backup)}")
+        # Use the new backup-manager.sh script for organized backups
+        # This creates full backups on Sundays, daily backups on other days
+        # Organized in YYYY/MM/DD folder structure with 180-day retention
+        script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'backup-manager.sh')
+
+        result = subprocess.run(
+            [script_path, '--auto'],
+            capture_output=True,
+            text=True,
+            timeout=600  # 10 minute timeout
+        )
+
+        if result.returncode == 0:
+            app.logger.info("Automatic backup completed successfully")
+            app.logger.info(f"Backup output: {result.stdout}")
+
+            # Run cleanup to enforce 180-day retention policy
+            cleanup_result = subprocess.run(
+                [script_path, '--cleanup'],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+
+            if cleanup_result.returncode == 0:
+                app.logger.info("Backup cleanup completed")
+            else:
+                app.logger.warning(f"Backup cleanup had issues: {cleanup_result.stderr}")
+
+            # Run archiving for backups >30 days old
+            archive_result = subprocess.run(
+                [script_path, '--archive'],
+                capture_output=True,
+                text=True,
+                timeout=600
+            )
+
+            if archive_result.returncode == 0:
+                app.logger.info("Backup archiving completed")
+            else:
+                app.logger.warning(f"Backup archiving had issues: {archive_result.stderr}")
+
+        else:
+            app.logger.error(f"Automatic backup failed: {result.stderr}")
+            raise Exception(f"Backup script failed: {result.stderr}")
+
+    except subprocess.TimeoutExpired:
+        app.logger.error("Automatic backup timed out")
     except Exception as e:
-        print(f"Automatic backup failed: {str(e)}")
+        app.logger.error(f"Automatic backup failed: {str(e)}")
 
 @app.route('/api/backups', methods=['GET'])
 @login_required
 def list_backups():
-    """List all available backups"""
+    """List all available backups from organized structure"""
     if current_user.role != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
 
     try:
         backups = []
-        for backup_file in glob.glob(os.path.join(BACKUP_DIR, '*.sql')):
+
+        # Try to read from backup index first (faster)
+        index_file = os.path.join(BACKUP_DIR, 'index', 'backup_index.json')
+        if os.path.exists(index_file):
+            try:
+                import json
+                with open(index_file, 'r') as f:
+                    index_data = json.load(f)
+                    return jsonify({'backups': index_data.get('backups', [])})
+            except Exception as e:
+                app.logger.warning(f"Could not read backup index: {e}")
+
+        # Fallback: scan directories directly
+        # Scan full backups
+        for backup_file in glob.glob(os.path.join(BACKUP_DIR, 'full', '*', '*', '*', 'backup_full_*.sql*')):
             filename = os.path.basename(backup_file)
-            stat = os.stat(backup_file)
+            stat_info = os.stat(backup_file)
+            relative_path = os.path.relpath(backup_file, BACKUP_DIR)
+
+            # Check for metadata
+            metadata_file = backup_file.replace('.sql.gz', '.sql.metadata.json').replace('.sql', '.metadata.json')
+            metadata = {}
+            if os.path.exists(metadata_file):
+                try:
+                    import json
+                    with open(metadata_file, 'r') as f:
+                        metadata = json.load(f)
+                except:
+                    pass
+
             backups.append({
                 'filename': filename,
-                'size': stat.st_size,
-                'created_at': datetime.fromtimestamp(stat.st_mtime).isoformat(),
-                'is_automatic': filename.startswith('backup_')
+                'relative_path': relative_path,
+                'backup_type': 'full',
+                'size': stat_info.st_size,
+                'created_at': metadata.get('created_at', datetime.fromtimestamp(stat_info.st_mtime).isoformat()),
+                'compressed': filename.endswith('.gz'),
+                'verified': metadata.get('verified', False),
+                'checksum_md5': metadata.get('checksum_md5', ''),
+                'table_count': metadata.get('table_count', 0)
+            })
+
+        # Scan daily backups
+        for backup_file in glob.glob(os.path.join(BACKUP_DIR, 'daily', '*', '*', '*', 'backup_daily_*.sql*')):
+            filename = os.path.basename(backup_file)
+            stat_info = os.stat(backup_file)
+            relative_path = os.path.relpath(backup_file, BACKUP_DIR)
+
+            # Check for metadata
+            metadata_file = backup_file.replace('.sql.gz', '.sql.metadata.json').replace('.sql', '.metadata.json')
+            metadata = {}
+            if os.path.exists(metadata_file):
+                try:
+                    import json
+                    with open(metadata_file, 'r') as f:
+                        metadata = json.load(f)
+                except:
+                    pass
+
+            backups.append({
+                'filename': filename,
+                'relative_path': relative_path,
+                'backup_type': 'daily',
+                'size': stat_info.st_size,
+                'created_at': metadata.get('created_at', datetime.fromtimestamp(stat_info.st_mtime).isoformat()),
+                'compressed': filename.endswith('.gz'),
+                'verified': metadata.get('verified', False),
+                'checksum_md5': metadata.get('checksum_md5', ''),
+                'table_count': metadata.get('table_count', 0)
             })
 
         # Sort by creation time, newest first
@@ -1117,15 +1315,6 @@ scheduler = BackgroundScheduler()
 # Run automatic backup every day at 2 AM
 scheduler.add_job(func=automatic_backup, trigger="cron", hour=2, minute=0)
 scheduler.start()
-
-# Create initial backup on startup
-with app.app_context():
-    try:
-        print("Creating initial backup on startup...")
-        backup_info = create_backup()
-        print(f"Initial backup created: {backup_info['filename']}")
-    except Exception as e:
-        print(f"Failed to create initial backup: {str(e)}")
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0')
