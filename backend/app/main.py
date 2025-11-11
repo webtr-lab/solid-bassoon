@@ -63,6 +63,9 @@ def add_security_headers(response):
     # Content Security Policy - restrict resources to same origin
     response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
 
+    # HTTP Strict Transport Security - force HTTPS for 1 year
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+
     # Don't expose server details
     response.headers['Server'] = 'MapsTracker'
 
