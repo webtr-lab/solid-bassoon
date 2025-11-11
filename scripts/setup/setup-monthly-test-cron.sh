@@ -26,9 +26,10 @@ log_warn() {
     echo -e "${YELLOW}WARN: $@${NC}"
 }
 
-# Configuration
-SCRIPT_DIR="/home/demo/effective-guide"
-TEST_SCRIPT="${SCRIPT_DIR}/monthly-restore-test.sh"
+# Configuration - Automatically detect the project directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
+TEST_SCRIPT="${BASE_DIR}/scripts/backup/monthly-restore-test.sh"
 
 # Check if test script exists
 if [ ! -f "${TEST_SCRIPT}" ]; then
@@ -91,7 +92,7 @@ case ${schedule_choice} in
 esac
 
 # Create cron job entry
-CRON_ENTRY="${CRON_SCHEDULE} ${TEST_SCRIPT} >> ${SCRIPT_DIR}/logs/monthly-restore-test.log 2>&1"
+CRON_ENTRY="${CRON_SCHEDULE} cd ${BASE_DIR} && ${TEST_SCRIPT} >> ${BASE_DIR}/logs/monthly-restore-test.log 2>&1"
 
 log_info ""
 log_info "Creating cron job with schedule: ${DESCRIPTION}"
@@ -120,7 +121,7 @@ log_info "Cron job successfully created!"
 log_info "=========================================="
 log_info "Schedule: ${DESCRIPTION}"
 log_info "Script: ${TEST_SCRIPT}"
-log_info "Log file: ${SCRIPT_DIR}/logs/monthly-restore-test.log"
+log_info "Log file: ${BASE_DIR}/logs/monthly-restore-test.log"
 log_info ""
 log_info "Current crontab entries:"
 crontab -l | grep -A1 "Monthly" || true
@@ -129,7 +130,7 @@ log_info ""
 log_info "Useful commands:"
 log_info "  View cron jobs:        crontab -l"
 log_info "  Edit cron jobs:        crontab -e"
-log_info "  View test log:         tail -f ${SCRIPT_DIR}/logs/monthly-restore-test.log"
+log_info "  View test log:         tail -f ${BASE_DIR}/logs/monthly-restore-test.log"
 log_info "  Test manually:         ${TEST_SCRIPT}"
 log_info ""
 log_info "To test the monthly restore now, run:"

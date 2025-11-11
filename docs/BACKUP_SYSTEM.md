@@ -1,8 +1,8 @@
-# GPS Tracker Backup System - Complete Guide
+# Maps Tracker Backup System - Complete Guide
 
 ## Overview
 
-The GPS Tracker application uses an **organized, two-tier backup system** with full and daily backups, 6-month retention, and automatic compression. Backups are stored in a date-organized folder structure for easy navigation and fast restore.
+The Maps Tracker application uses an **organized, two-tier backup system** with full and daily backups, 6-month retention, and automatic compression. Backups are stored in a date-organized folder structure for easy navigation and fast restore.
 
 **Key Features**:
 - ✅ Weekly full backups (every Sunday)
@@ -219,7 +219,7 @@ Each backup has a `.metadata.json` file with comprehensive information:
   "file_size_human": "2.3MiB",
   "checksum_md5": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
   "table_count": 5,
-  "database": "gps_tracker",
+  "database": "maps_tracker",
   "postgres_version": "PostgreSQL 15.3",
   "compressed": false,
   "verified": true
@@ -274,7 +274,7 @@ The system automatically syncs backups to a remote server for disaster recovery.
 
 **Remote server**: 192.168.100.74
 **Remote user**: demo
-**Remote path**: ~/gps-tracker-backup/
+**Remote path**: ~/maps-tracker-backup/
 
 ### Manual Sync
 
@@ -299,10 +299,10 @@ The system automatically syncs backups to a remote server for disaster recovery.
 
 ```bash
 # List remote backups
-ssh demo@192.168.100.74 "ls -lh ~/gps-tracker-backup/backups/full/2025/11/"
+ssh demo@192.168.100.74 "ls -lh ~/maps-tracker-backup/backups/full/2025/11/"
 
 # Check remote disk usage
-ssh demo@192.168.100.74 "du -sh ~/gps-tracker-backup/"
+ssh demo@192.168.100.74 "du -sh ~/maps-tracker-backup/"
 ```
 
 ---
@@ -489,7 +489,7 @@ docker compose exec backend ps aux | grep cron
 | `/home/demo/effective-guide/backups/index/` | Backup index and metadata |
 | `/home/demo/effective-guide/backups/pre-restore-safety/` | Safety backups |
 | `/home/demo/effective-guide/logs/` | Application and backup logs |
-| `demo@192.168.100.74:~/gps-tracker-backup/` | Remote backup location |
+| `demo@192.168.100.74:~/maps-tracker-backup/` | Remote backup location |
 
 ---
 

@@ -1,10 +1,67 @@
 # Email Notification System
 
-This document describes all email notifications configured in the GPS Tracker application.
+Complete documentation for Maps Tracker email notifications, SMTP relay, and professional email templates.
 
-## Recipient
+## Overview
 
-**Primary Admin Email**: `demo@praxisnetworking.com`
+This system provides clean, easy-to-understand email notifications for:
+- Backup operations (full, daily, remote sync)
+- Database restore operations
+- Monthly disaster recovery tests
+- Monitoring and health check alerts
+- Backup verification
+
+## Components
+
+### `send-email.sh` - SMTP Relay
+
+Direct SMTP relay script for sending emails without requiring system mail server configuration.
+
+**Features:**
+- Uses SMTP_SSL (port 465) for secure, reliable delivery
+- No `sudo` required
+- No system mail server dependency (Postfix/Exim)
+- Works immediately without service restart
+- Proper error handling and logging
+- All email activity logged to `logs/email.log`
+
+**Usage:**
+```bash
+./send-email.sh <recipient> <subject> <message>
+```
+
+**Configuration:**
+Set environment variables or the script uses defaults:
+```bash
+export SMTP_HOST="box.praxisnetworking.com"
+export SMTP_PORT="465"
+export SMTP_USER="notification@praxisnetworking.com"
+export SMTP_PASS="vhnwPn3mK7wR"
+```
+
+### `email_templates.py` - Professional Templates
+
+Professional email template library for consistent, clean notification formatting.
+
+**Available Templates:**
+- `format_backup_success()` - Successful backup completion
+- `format_backup_failure()` - Backup failure with troubleshooting
+- `format_restore_success()` - Successful database restore
+- `format_restore_failure()` - Restore failure with recovery steps
+- `format_remote_sync_success()` - Remote backup sync success
+- `format_remote_sync_failure()` - Remote sync failure with diagnostics
+- `format_monthly_restore_test_success()` - Test passed, DR verified
+- `format_monthly_restore_test_failure()` - Test failed, action required
+
+## Primary Admin Email
+
+**Recipient**: `demo@praxisnetworking.com`
+
+All notifications are sent to this address by default. Configure via `.env` file:
+```bash
+BACKUP_EMAIL="admin@example.com"
+EMAIL_ENABLED=true
+```
 
 ## Notification Systems
 
@@ -26,7 +83,7 @@ This document describes all email notifications configured in the GPS Tracker ap
 
 **Email Format**:
 ```
-Subject: [GPS Tracker Status] System Degraded
+Subject: [Maps Tracker Status] System Degraded
 Body: Comprehensive status report with all metrics
 ```
 
@@ -58,7 +115,7 @@ Body: Comprehensive status report with all metrics
 
 **Email Format**:
 ```
-Subject: [GPS Tracker Monthly Restore Test] SUCCESS
+Subject: [Maps Tracker Monthly Restore Test] SUCCESS
 Body: Detailed test report with all verification steps
 ```
 
@@ -89,7 +146,7 @@ Body: Detailed test report with all verification steps
 
 **Email Format**:
 ```
-Subject: [GPS Tracker Backup] SUCCESS - Remote Backup Completed
+Subject: [Maps Tracker Backup] SUCCESS - Remote Backup Completed
 Body: Backup summary with statistics
 ```
 
@@ -120,7 +177,7 @@ Body: Backup summary with statistics
 
 **Email Format**:
 ```
-Subject: [GPS Tracker Backup Verification] SUCCESS
+Subject: [Maps Tracker Backup Verification] SUCCESS
 Body: Verification details and checks performed
 ```
 
@@ -169,7 +226,7 @@ import subprocess
 # Example: Notify admin of manual restore
 subprocess.run([
     'python3', '/home/demo/effective-guide/send-admin-email.py',
-    '[GPS Tracker] Manual Restore Completed',
+    '[Maps Tracker] Manual Restore Completed',
     f'Database restored from backup: {backup_filename}\nInitiated by: {current_user.username}'
 ])
 ```
@@ -239,7 +296,7 @@ Legend:
 ./scripts/backup/monthly-restore-test.sh
 
 # Test 5: Python Email Helper
-python3 send-admin-email.py "[GPS Tracker] Test" "This is a test notification"
+python3 send-admin-email.py "[Maps Tracker] Test" "This is a test notification"
 ```
 
 ### Expected Results
@@ -290,43 +347,62 @@ EMAIL_RECIPIENT="your-email@example.com"
 
 ### Emails Not Being Received
 
-1. **Check mail command**:
+**Check Email Log:**
 ```bash
-which mail mailx
+# View recent email activity
+tail -20 logs/email.log
+
+# Search for failed emails
+grep "FAILED" logs/email.log
+
+# Check specific recipient
+grep "demo@praxisnetworking.com" logs/email.log
 ```
 
-2. **Test basic email**:
+**Test SMTP Relay Directly:**
 ```bash
-echo "Test" | mail -s "Test" demo@praxisnetworking.com
+# Test send-email.sh script directly
+./scripts/email/send-email.sh test@example.com "Test Subject" "Test message body"
+
+# Should output:
+# Connecting to SMTP server: box.praxisnetworking.com:465
+# SMTP authentication successful
+# Sending email to: test@example.com
+# Email sent successfully
 ```
 
-3. **Check mail logs**:
+**Verify SMTP Credentials:**
 ```bash
-grep -i "demo@praxisnetworking.com" /var/log/mail.log | tail -20
-```
+python3 -c "
+import smtplib
+smtp_host = 'box.praxisnetworking.com'
+smtp_port = 465
+smtp_user = 'notification@praxisnetworking.com'
+smtp_pass = 'vhnwPn3mK7wR'
 
-4. **Verify email is enabled in scripts**:
-```bash
-grep "EMAIL_ENABLED" *.sh
+try:
+    server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)
+    server.login(smtp_user, smtp_pass)
+    print('✓ SMTP authentication successful')
+    server.quit()
+except Exception as e:
+    print(f'✗ SMTP error: {e}')
+"
 ```
-
-5. **Check spam folder**: Some special characters may trigger spam filters
 
 ### Common Issues
 
-**Issue**: Emails with emojis in subject rejected
-**Solution**: Already fixed - emojis removed from subjects
+**Issue**: "SMTP Authentication failed" in logs
+**Solution**: Verify SMTP_USER and SMTP_PASS are correct in send-email.sh
 
-**Issue**: Permission denied writing checksum files
-**Solution**: Backups created by Docker (root), verification script runs as demo user
-- Use `sudo` for manual verification, or
-- Change backup directory permissions
+**Issue**: "Connecting to SMTP server: timeout"
+**Solution**: Check network connectivity and SMTP_HOST/SMTP_PORT settings
 
-**Issue**: Mail command not found
-**Solution**: Install mailutils
-```bash
-sudo apt-get install mailutils
-```
+**Issue**: Email log shows SUCCESS but email not received
+**Solution**: Check spam folder, verify recipient email address is correct
+
+**Issue**: Script fails to find send-email.sh
+**Solution**: Verify path is correct: `scripts/email/send-email.sh`
 
 ---
 
@@ -407,4 +483,4 @@ All critical admin operations have email notifications:
 **Primary Recipient**: demo@praxisnetworking.com
 **Delivery Status**: All systems tested and functional
 
-The GPS Tracker application has comprehensive email notification coverage for all admin-critical events. No additional notifications are required for normal operations.
+The Maps Tracker application has comprehensive email notification coverage for all admin-critical events. No additional notifications are required for normal operations.

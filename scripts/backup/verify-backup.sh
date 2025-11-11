@@ -23,15 +23,31 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Configuration
-BACKUP_DIR="/home/demo/effective-guide/backups"
-LOG_FILE="/home/demo/effective-guide/logs/backup-verification.log"
+# Automatically detect the project directory (scripts/backup -> scripts -> effective-guide)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
+BACKUP_DIR="${BASE_DIR}/backups"
+LOG_FILE="${BASE_DIR}/logs/backup-verification.log"
 MIN_BACKUP_SIZE=10240     # 10KB minimum
 MIN_TABLE_COUNT=5         # Minimum expected tables
 
-# Email configuration (matches rsync backup settings)
-EMAIL_ENABLED=true
-EMAIL_RECIPIENT="demo@praxisnetworking.com"
-EMAIL_SUBJECT_PREFIX="[GPS Tracker Backup Verification]"
+# Email configuration (sourced from .env or with defaults)
+EMAIL_ENABLED="${BACKUP_EMAIL_ENABLED:-true}"
+EMAIL_RECIPIENT="${BACKUP_EMAIL:-admin@example.com}"
+EMAIL_SUBJECT_PREFIX="[Maps Tracker Backup Verification]"
+
+# Load .env if it exists for environment variables
+if [ -f "${BASE_DIR}/.env" ]; then
+    set +a
+    source "${BASE_DIR}/.env"
+    set -a
+    EMAIL_ENABLED="${BACKUP_EMAIL_ENABLED:-true}"
+    EMAIL_RECIPIENT="${BACKUP_EMAIL:-admin@example.com}"
+fi
+
+# Database settings from .env with fallback defaults
+DB_USER="${POSTGRES_USER:-gpsadmin}"
+DB_NAME="${POSTGRES_DB:-gps_tracker}"
 
 # Logging functions
 log() {
@@ -67,50 +83,60 @@ send_verification_alert() {
         return 0
     fi
 
-    if ! command -v mail &> /dev/null && ! command -v mailx &> /dev/null; then
-        log_warn "Email notification skipped: mail command not available"
-        return 1
-    fi
-
-    local MAIL_CMD="mail"
-    if command -v mailx &> /dev/null; then
-        MAIL_CMD="mailx"
-    fi
-
     local subject
-    local status_emoji
     if [ "$status" == "success" ]; then
-        subject="${EMAIL_SUBJECT_PREFIX} SUCCESS - Backup Verified"
-        status_emoji="✅"
+        subject="${EMAIL_SUBJECT_PREFIX} [VERIFY] Backup Verification Passed"
     else
-        subject="${EMAIL_SUBJECT_PREFIX} FAILURE - Backup Verification Failed"
-        status_emoji="❌"
+        subject="${EMAIL_SUBJECT_PREFIX} [VERIFY] Backup Verification Failed - Action Required"
     fi
 
     local email_body=$(cat <<EOF
-${status_emoji} GPS Tracker Backup Verification Report
-==========================================
+Maps Tracker Backup Verification Report
+════════════════════════════════════════════════════════════════
 
-Status: ${status^^}
-Timestamp: $(date '+%Y-%m-%d %H:%M:%S')
-Backup File: ${backup_file}
-Server: $(hostname)
+Status:     $([ "$status" == "success" ] && echo "✓ SUCCESSFUL" || echo "✗ FAILED")
+Timestamp:  $(date '+%Y-%m-%d %H:%M:%S')
+Backup:     $(basename "${backup_file}")
+Server:     $(hostname)
 
+VERIFICATION DETAILS
+──────────────────────────────────────────────────────────────────
 ${details}
 
-Log File: ${LOG_FILE}
+ACTION REQUIRED (if failure)
+──────────────────────────────────────────────────────────────────
+Please review the logs for detailed error information:
+${LOG_FILE}
 
-==========================================
-This is an automated notification from the GPS Tracker backup verification system.
+════════════════════════════════════════════════════════════════
+This is an automated notification from the Maps Tracker backup verification system.
 EOF
 )
 
-    echo "$email_body" | $MAIL_CMD -s "$subject" "$EMAIL_RECIPIENT" 2>&1 | tee -a "${LOG_FILE}"
+    # Try using the SMTP relay script from scripts/email directory
+    local SEND_EMAIL_SCRIPT="${BASE_DIR}/scripts/email/send-email.sh"
+    if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${LOG_FILE}"
+        return 0
+    fi
 
-    if [ ${PIPESTATUS[1]} -eq 0 ]; then
-        log_info "Email notification sent successfully"
-    else
-        log_error "Failed to send email notification"
+    # Fallback to parent directory for backward compatibility
+    SEND_EMAIL_SCRIPT="$(dirname "${BASE_DIR}")/send-email.sh"
+    if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${LOG_FILE}"
+        return 0
+    fi
+
+    # Final fallback to mail command if available
+    if command -v mail &> /dev/null || command -v mailx &> /dev/null; then
+        local MAIL_CMD="mail"
+        if command -v mailx &> /dev/null; then
+            MAIL_CMD="mailx"
+        fi
+        echo "$email_body" | $MAIL_CMD -s "$subject" "$EMAIL_RECIPIENT" 2>&1 | tee -a "${LOG_FILE}"
+        if [ ${PIPESTATUS[1]} -eq 0 ]; then
+            log_info "Email notification sent successfully"
+        fi
     fi
 }
 
@@ -250,12 +276,12 @@ if [ "$FULL_TEST" = true ]; then
 
     # Create test database
     log_info "Creating test database: ${TEST_DB}..."
-    if docker compose exec -T db psql -U gpsadmin -d postgres -c "CREATE DATABASE ${TEST_DB};" > /dev/null 2>&1; then
+    if docker compose exec -T db psql -U "${DB_USER}" -d postgres -c "CREATE DATABASE ${TEST_DB};" > /dev/null 2>&1; then
         log_info "✓ Test database created"
 
         # Restore backup
         log_info "Restoring backup to test database..."
-        if docker compose exec -T db pg_restore -U gpsadmin -d "${TEST_DB}" --clean --if-exists "/backups/${BACKUP_FILE}" 2>&1 | grep -i "error: " > /tmp/restore_errors_$$.txt; then
+        if docker compose exec -T db pg_restore -U "${DB_USER}" -d "${TEST_DB}" --clean --if-exists "/backups/${BACKUP_FILE}" 2>&1 | grep -i "error: " > /tmp/restore_errors_$$.txt; then
             if [ -s /tmp/restore_errors_$$.txt ]; then
                 log_error "Restore test encountered errors:"
                 cat /tmp/restore_errors_$$.txt | tee -a "${LOG_FILE}"
@@ -268,7 +294,7 @@ if [ "$FULL_TEST" = true ]; then
 
             # Verify table row counts
             log_info "Verifying restored data..."
-            ROW_COUNTS=$(docker compose exec -T db psql -U gpsadmin -d "${TEST_DB}" -t -c "
+            ROW_COUNTS=$(docker compose exec -T db psql -U "${DB_USER}" -d "${TEST_DB}" -t -c "
                 SELECT
                     'users: ' || COUNT(*) FROM users
                 UNION ALL
@@ -294,7 +320,7 @@ if [ "$FULL_TEST" = true ]; then
 
         # Clean up test database
         log_info "Cleaning up test database..."
-        docker compose exec -T db psql -U gpsadmin -d postgres -c "DROP DATABASE IF EXISTS ${TEST_DB};" > /dev/null 2>&1
+        docker compose exec -T db psql -U "${DB_USER}" -d postgres -c "DROP DATABASE IF EXISTS ${TEST_DB};" > /dev/null 2>&1
         log_info "✓ Test database cleaned up"
     else
         log_error "Failed to create test database"

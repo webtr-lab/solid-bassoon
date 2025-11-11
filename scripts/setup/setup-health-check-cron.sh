@@ -3,7 +3,8 @@
 # Setup script for daily health check cron job
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HEALTH_CHECK_SCRIPT="$SCRIPT_DIR/health-check.sh"
+BASE_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
+HEALTH_CHECK_SCRIPT="$BASE_DIR/scripts/monitoring/health-check.sh"
 
 echo "Setting up daily health check cron job..."
 
@@ -19,7 +20,7 @@ if [ ! -x "$HEALTH_CHECK_SCRIPT" ]; then
 fi
 
 # Create cron job entry
-CRON_JOB="0 2 * * * cd $SCRIPT_DIR && $HEALTH_CHECK_SCRIPT >> $SCRIPT_DIR/logs/cron.log 2>&1"
+CRON_JOB="0 2 * * * cd $BASE_DIR && $HEALTH_CHECK_SCRIPT >> $BASE_DIR/logs/cron.log 2>&1"
 
 # Check if cron job already exists
 if crontab -l 2>/dev/null | grep -q "$HEALTH_CHECK_SCRIPT"; then
@@ -37,7 +38,7 @@ echo "✓ Cron job configured successfully!"
 echo ""
 echo "Schedule: Daily at 2:00 AM"
 echo "Script: $HEALTH_CHECK_SCRIPT"
-echo "Logs: $SCRIPT_DIR/logs/health-check.log"
+echo "Logs: $BASE_DIR/logs/health-check.log"
 echo ""
 echo "Current crontab:"
 crontab -l | grep health-check.sh
@@ -46,7 +47,7 @@ echo "To run the health check manually:"
 echo "  $HEALTH_CHECK_SCRIPT"
 echo ""
 echo "To view the health check log:"
-echo "  tail -f $SCRIPT_DIR/logs/health-check.log"
+echo "  tail -f $BASE_DIR/logs/health-check.log"
 echo ""
 echo "To remove the cron job:"
 echo "  crontab -e  # then delete the health-check.sh line"

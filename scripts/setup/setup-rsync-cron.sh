@@ -26,10 +26,11 @@ log_warn() {
     echo -e "${YELLOW}WARN: $@${NC}"
 }
 
-# Configuration
-SCRIPT_DIR="/home/demo/effective-guide"
-BACKUP_SCRIPT="${SCRIPT_DIR}/rsync-backup-remote.sh"
-CRON_USER="demo"
+# Configuration - Automatically detect the project directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
+BACKUP_SCRIPT="${BASE_DIR}/scripts/backup/rsync-backup-remote.sh"
+CRON_USER="${USER}"
 
 # Check if backup script exists
 if [ ! -f "${BACKUP_SCRIPT}" ]; then
@@ -97,7 +98,7 @@ case ${schedule_choice} in
 esac
 
 # Create cron job entry
-CRON_ENTRY="${CRON_SCHEDULE} ${BACKUP_SCRIPT} >> ${SCRIPT_DIR}/logs/rsync-backup.log 2>&1"
+CRON_ENTRY="${CRON_SCHEDULE} cd ${BASE_DIR} && ${BACKUP_SCRIPT} >> ${BASE_DIR}/logs/rsync-backup.log 2>&1"
 
 log_info ""
 log_info "Creating cron job with schedule: ${DESCRIPTION}"
@@ -126,7 +127,7 @@ log_info "Cron job successfully created!"
 log_info "=========================================="
 log_info "Schedule: ${DESCRIPTION}"
 log_info "Script: ${BACKUP_SCRIPT}"
-log_info "Log file: ${SCRIPT_DIR}/logs/rsync-backup.log"
+log_info "Log file: ${BASE_DIR}/logs/rsync-backup.log"
 log_info ""
 log_info "Current crontab entries:"
 crontab -l | grep -A1 "remote backup" || true
@@ -136,7 +137,7 @@ log_info "Useful commands:"
 log_info "  View cron jobs:        crontab -l"
 log_info "  Edit cron jobs:        crontab -e"
 log_info "  Remove cron jobs:      crontab -r"
-log_info "  View backup log:       tail -f ${SCRIPT_DIR}/logs/rsync-backup.log"
+log_info "  View backup log:       tail -f ${BASE_DIR}/logs/rsync-backup.log"
 log_info "  Test backup manually:  ${BACKUP_SCRIPT}"
 log_info ""
 log_info "To test the backup now, run:"

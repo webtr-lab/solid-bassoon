@@ -24,14 +24,30 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 # Configuration
-BACKUP_DIR="/home/demo/effective-guide/backups"
-LOG_FILE="/home/demo/effective-guide/logs/monthly-restore-test.log"
+# Automatically detect the project directory (scripts/backup -> scripts -> effective-guide)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
+BACKUP_DIR="${BASE_DIR}/backups"
+LOG_FILE="${BASE_DIR}/logs/monthly-restore-test.log"
 TEST_DB="monthly_restore_test_$(date +%Y%m)"
 
-# Email configuration
-EMAIL_ENABLED=true
-EMAIL_RECIPIENT="demo@praxisnetworking.com"
-EMAIL_SUBJECT_PREFIX="[GPS Tracker Monthly Restore Test]"
+# Email configuration (sourced from .env or with defaults)
+EMAIL_ENABLED="${BACKUP_EMAIL_ENABLED:-true}"
+EMAIL_RECIPIENT="${BACKUP_EMAIL:-admin@example.com}"
+EMAIL_SUBJECT_PREFIX="[Maps Tracker Monthly Restore Test]"
+
+# Load .env if it exists for environment variables
+if [ -f "${BASE_DIR}/.env" ]; then
+    set +a
+    source "${BASE_DIR}/.env"
+    set -a
+    EMAIL_ENABLED="${BACKUP_EMAIL_ENABLED:-true}"
+    EMAIL_RECIPIENT="${BACKUP_EMAIL:-admin@example.com}"
+fi
+
+# Database settings from .env with fallback defaults
+DB_USER="${POSTGRES_USER:-gpsadmin}"
+DB_NAME="${POSTGRES_DB:-gps_tracker}"
 
 # Logging functions
 log() {
@@ -71,57 +87,71 @@ send_test_report() {
         return 0
     fi
 
-    if ! command -v mail &> /dev/null && ! command -v mailx &> /dev/null; then
-        log_warn "Email notification skipped: mail command not available"
-        return 1
-    fi
-
-    local MAIL_CMD="mail"
-    if command -v mailx &> /dev/null; then
-        MAIL_CMD="mailx"
-    fi
-
     local subject
-    local status_emoji
     if [ "$status" == "success" ]; then
-        subject="${EMAIL_SUBJECT_PREFIX} SUCCESS - Monthly Restore Test Passed"
-        status_emoji="✅"
+        subject="${EMAIL_SUBJECT_PREFIX} [MONTHLY-TEST] Disaster Recovery Test Passed"
     else
-        subject="${EMAIL_SUBJECT_PREFIX} FAILURE - Monthly Restore Test Failed"
-        status_emoji="❌"
+        subject="${EMAIL_SUBJECT_PREFIX} [MONTHLY-TEST] Disaster Recovery Test Failed - Action Required"
     fi
 
     local email_body=$(cat <<EOF
-${status_emoji} GPS Tracker Monthly Restore Test Report
-==========================================
+Maps Tracker Monthly Restore Test Report
+════════════════════════════════════════════════════════════════
 
-Status: ${status^^}
-Timestamp: $(date '+%Y-%m-%d %H:%M:%S')
-Month: $(date '+%B %Y')
-Server: $(hostname)
+Status:     $([ "$status" == "success" ] && echo "✓ SUCCESSFUL" || echo "✗ FAILED")
+Timestamp:  $(date '+%Y-%m-%d %H:%M:%S')
+Month:      $(date '+%B %Y')
+Server:     $(hostname)
 
+TEST RESULTS
+──────────────────────────────────────────────────────────────────
 ${details}
+
+TROUBLESHOOTING (if failure)
+──────────────────────────────────────────────────────────────────
+If the test failed, please review:
+1. Check logs: tail -100 ${LOG_FILE} | grep ERROR
+2. Verify database: docker compose exec db pg_isready
+3. Check disk space: df -h
 
 Log File: ${LOG_FILE}
 
-==========================================
-This is an automated monthly backup integrity test.
+════════════════════════════════════════════════════════════════
+This is an automated monthly backup integrity test for disaster recovery verification.
 EOF
 )
 
-    echo "$email_body" | $MAIL_CMD -s "$subject" "$EMAIL_RECIPIENT" 2>&1 | tee -a "${LOG_FILE}"
+    # Try using the SMTP relay script from scripts/email directory
+    local SEND_EMAIL_SCRIPT="${BASE_DIR}/scripts/email/send-email.sh"
+    if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${LOG_FILE}"
+        return 0
+    fi
 
-    if [ ${PIPESTATUS[1]} -eq 0 ]; then
-        log_info "Email notification sent successfully"
-    else
-        log_error "Failed to send email notification"
+    # Fallback to parent directory for backward compatibility
+    SEND_EMAIL_SCRIPT="$(dirname "${BASE_DIR}")/send-email.sh"
+    if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${LOG_FILE}"
+        return 0
+    fi
+
+    # Final fallback to mail command if available
+    if command -v mail &> /dev/null || command -v mailx &> /dev/null; then
+        local MAIL_CMD="mail"
+        if command -v mailx &> /dev/null; then
+            MAIL_CMD="mailx"
+        fi
+        echo "$email_body" | $MAIL_CMD -s "$subject" "$EMAIL_RECIPIENT" 2>&1 | tee -a "${LOG_FILE}"
+        if [ ${PIPESTATUS[1]} -eq 0 ]; then
+            log_info "Email notification sent successfully"
+        fi
     fi
 }
 
 # Cleanup function
 cleanup() {
     log_info "Cleaning up test database..."
-    docker compose exec -T db psql -U gpsadmin -d postgres -c "DROP DATABASE IF EXISTS ${TEST_DB};" > /dev/null 2>&1 || true
+    docker compose exec -T db psql -U "${DB_USER}" -d postgres -c "DROP DATABASE IF EXISTS ${TEST_DB};" > /dev/null 2>&1 || true
     log_info "Cleanup completed"
 }
 
@@ -137,9 +167,9 @@ log_info ""
 TEST_PASSED=true
 REPORT_DETAILS=""
 
-# Step 1: Find most recent backup
+# Step 1: Find most recent backup (supports organized backup structure)
 log_info "Step 1: Finding most recent backup..."
-LATEST_BACKUP=$(ls -t ${BACKUP_DIR}/backup_*.sql 2>/dev/null | head -1)
+LATEST_BACKUP=$(find "${BACKUP_DIR}" -name "backup_*.sql" -type f 2>/dev/null | sort | tail -1)
 
 if [ -z "$LATEST_BACKUP" ]; then
     log_error "No backup files found in ${BACKUP_DIR}"
@@ -149,6 +179,11 @@ if [ -z "$LATEST_BACKUP" ]; then
 fi
 
 BACKUP_FILENAME=$(basename "$LATEST_BACKUP")
+# Create relative path for Docker (remove BACKUP_DIR prefix to get relative path)
+BACKUP_RELATIVE_PATH="${LATEST_BACKUP#${BACKUP_DIR}/}"
+# For Docker container, use /backups prefix
+BACKUP_DOCKER_PATH="/backups/${BACKUP_RELATIVE_PATH}"
+
 BACKUP_SIZE=$(stat -c%s "$LATEST_BACKUP" 2>/dev/null || stat -f%z "$LATEST_BACKUP" 2>/dev/null)
 BACKUP_SIZE_HUMAN=$(numfmt --to=iec-i --suffix=B $BACKUP_SIZE 2>/dev/null || echo "${BACKUP_SIZE} bytes")
 BACKUP_DATE=$(stat -c%y "$LATEST_BACKUP" 2>/dev/null | cut -d' ' -f1 || stat -f%Sm -t "%Y-%m-%d" "$LATEST_BACKUP" 2>/dev/null)
@@ -164,16 +199,21 @@ log_test "Step 2: Verifying backup checksum..."
 CHECKSUM_FILE="${LATEST_BACKUP}.md5"
 
 if [ -f "$CHECKSUM_FILE" ]; then
-    cd "$BACKUP_DIR"
-    if md5sum -c "$(basename $CHECKSUM_FILE)" > /dev/null 2>&1; then
+    # Extract the checksum hash from the file
+    EXPECTED_CHECKSUM=$(awk '{print $1}' "$CHECKSUM_FILE")
+    # Calculate the actual checksum
+    ACTUAL_CHECKSUM=$(md5sum "$LATEST_BACKUP" | awk '{print $1}')
+
+    if [ "$EXPECTED_CHECKSUM" == "$ACTUAL_CHECKSUM" ]; then
         log_info "✓ Checksum verification passed"
         REPORT_DETAILS="${REPORT_DETAILS}\n✓ Checksum verified"
     else
         log_error "✗ Checksum verification failed"
+        log_error "  Expected: ${EXPECTED_CHECKSUM}"
+        log_error "  Actual:   ${ACTUAL_CHECKSUM}"
         REPORT_DETAILS="${REPORT_DETAILS}\n❌ Checksum verification failed"
         TEST_PASSED=false
     fi
-    cd - > /dev/null
 else
     log_warn "No checksum file found (${CHECKSUM_FILE})"
     REPORT_DETAILS="${REPORT_DETAILS}\n⚠️  No checksum file found"
@@ -182,7 +222,7 @@ log_info ""
 
 # Step 3: Validate PostgreSQL format
 log_test "Step 3: Validating PostgreSQL format..."
-if docker compose exec -T db pg_restore --list "/backups/${BACKUP_FILENAME}" > /tmp/monthly_test_list.txt 2>&1; then
+if docker compose exec -T db pg_restore --list "${BACKUP_DOCKER_PATH}" > /tmp/monthly_test_list.txt 2>&1; then
     TABLE_COUNT=$(grep -c "TABLE DATA" /tmp/monthly_test_list.txt)
     log_info "✓ PostgreSQL format is valid"
     log_info "  Contains ${TABLE_COUNT} tables"
@@ -198,10 +238,10 @@ log_info ""
 # Step 4: Create test database
 log_test "Step 4: Creating test database..."
 # Drop database if exists (run separately to avoid transaction block error)
-docker compose exec -T db psql -U gpsadmin -d postgres -c "DROP DATABASE IF EXISTS ${TEST_DB};" > /dev/null 2>&1 || true
+docker compose exec -T db psql -U "${DB_USER}" -d postgres -c "DROP DATABASE IF EXISTS ${TEST_DB};" > /dev/null 2>&1 || true
 
 # Create test database
-if docker compose exec -T db psql -U gpsadmin -d postgres -c "CREATE DATABASE ${TEST_DB};" > /dev/null 2>&1; then
+if docker compose exec -T db psql -U "${DB_USER}" -d postgres -c "CREATE DATABASE ${TEST_DB};" > /dev/null 2>&1; then
     log_info "✓ Test database created: ${TEST_DB}"
     REPORT_DETAILS="${REPORT_DETAILS}\n✓ Test database created"
 else
@@ -217,12 +257,12 @@ log_test "Step 5: Restoring backup to test database..."
 START_TIME=$(date +%s)
 
 if docker compose exec -T db pg_restore \
-    -U gpsadmin \
+    -U "${DB_USER}" \
     -d "${TEST_DB}" \
     --clean \
     --if-exists \
     --verbose \
-    "/backups/${BACKUP_FILENAME}" > /tmp/monthly_test_restore.log 2>&1; then
+    "${BACKUP_DOCKER_PATH}" > /tmp/monthly_test_restore.log 2>&1; then
 
     END_TIME=$(date +%s)
     RESTORE_DURATION=$((END_TIME - START_TIME))
@@ -249,7 +289,7 @@ EXPECTED_TABLES=("users" "vehicles" "locations" "saved_locations" "places_of_int
 MISSING_TABLES=()
 
 for table in "${EXPECTED_TABLES[@]}"; do
-    EXISTS=$(docker compose exec -T db psql -U gpsadmin -d "${TEST_DB}" -t -c "
+    EXISTS=$(docker compose exec -T db psql -U "${DB_USER}" -d "${TEST_DB}" -t -c "
         SELECT COUNT(*) FROM information_schema.tables
         WHERE table_name = '${table}';
     " | tr -d ' ')
@@ -274,7 +314,7 @@ log_info ""
 
 # Step 7: Verify row counts
 log_test "Step 7: Verifying data integrity..."
-ROW_COUNTS=$(docker compose exec -T db psql -U gpsadmin -d "${TEST_DB}" -t -c "
+ROW_COUNTS=$(docker compose exec -T db psql -U "${DB_USER}" -d "${TEST_DB}" -t -c "
     SELECT
         'Users: ' || COUNT(*) FROM users
     UNION ALL
@@ -302,7 +342,7 @@ log_info ""
 
 # Step 8: Test referential integrity
 log_test "Step 8: Testing referential integrity..."
-ORPHANED_LOCATIONS=$(docker compose exec -T db psql -U gpsadmin -d "${TEST_DB}" -t -c "
+ORPHANED_LOCATIONS=$(docker compose exec -T db psql -U "${DB_USER}" -d "${TEST_DB}" -t -c "
     SELECT COUNT(*) FROM locations l
     LEFT JOIN vehicles v ON l.vehicle_id = v.id
     WHERE v.id IS NULL;
@@ -324,7 +364,7 @@ QUERY_FAILED=false
 
 # Query 1: Get latest vehicle location
 log_info "  Testing query: Latest vehicle locations..."
-if docker compose exec -T db psql -U gpsadmin -d "${TEST_DB}" -c "
+if docker compose exec -T db psql -U "${DB_USER}" -d "${TEST_DB}" -c "
     SELECT v.name, l.latitude, l.longitude, l.timestamp
     FROM vehicles v
     LEFT JOIN locations l ON v.id = l.vehicle_id
@@ -339,7 +379,7 @@ fi
 
 # Query 2: Count locations per vehicle
 log_info "  Testing query: Location counts per vehicle..."
-if docker compose exec -T db psql -U gpsadmin -d "${TEST_DB}" -c "
+if docker compose exec -T db psql -U "${DB_USER}" -d "${TEST_DB}" -c "
     SELECT v.name, COUNT(l.id) as location_count
     FROM vehicles v
     LEFT JOIN locations l ON v.id = l.vehicle_id
@@ -353,7 +393,7 @@ fi
 
 # Query 3: Get places of interest
 log_info "  Testing query: Places of interest..."
-if docker compose exec -T db psql -U gpsadmin -d "${TEST_DB}" -c "
+if docker compose exec -T db psql -U "${DB_USER}" -d "${TEST_DB}" -c "
     SELECT name, latitude, longitude FROM places_of_interest LIMIT 5;
 " > /dev/null 2>&1; then
     log_info "  ✓ Places query successful"

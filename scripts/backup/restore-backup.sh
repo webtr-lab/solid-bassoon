@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# GPS Tracker Smart Restore Script
+# Maps Tracker Smart Restore Script
 # Intelligently restores from organized backup structure
 #
 # Features:
@@ -22,20 +22,33 @@
 set -e
 
 # Configuration
-BASE_DIR="/home/demo/effective-guide"
+# Automatically detect the project directory (scripts/backup -> scripts -> effective-guide)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 BACKUP_ROOT="${BASE_DIR}/backups"
 LOG_DIR="${BASE_DIR}/logs"
 RESTORE_LOG="${LOG_DIR}/restore.log"
 
-# Database settings
-DB_USER="gpsadmin"
-DB_NAME="gps_tracker"
+# Database settings (will be overridden after sourcing .env)
 DB_CONTAINER="effective-guide-db-1"
 
-# Email settings
-EMAIL_ENABLED=true
-EMAIL_RECIPIENT="demo@praxisnetworking.com"
-EMAIL_SUBJECT_PREFIX="[GPS Tracker Restore]"
+# Email settings (sourced from .env or with defaults)
+EMAIL_ENABLED="${BACKUP_EMAIL_ENABLED:-true}"
+EMAIL_RECIPIENT="${BACKUP_EMAIL:-admin@example.com}"
+EMAIL_SUBJECT_PREFIX="[Maps Tracker Restore]"
+
+# Load .env if it exists for environment variables
+if [ -f "${BASE_DIR}/.env" ]; then
+    set +a
+    source "${BASE_DIR}/.env"
+    set -a
+    EMAIL_ENABLED="${BACKUP_EMAIL_ENABLED:-true}"
+    EMAIL_RECIPIENT="${BACKUP_EMAIL:-admin@example.com}"
+fi
+
+# Database settings from .env with fallback defaults
+DB_USER="${POSTGRES_USER:-gpsadmin}"
+DB_NAME="${POSTGRES_DB:-gps_tracker}"
 
 # Colors
 RED='\033[0;31m'
@@ -55,8 +68,8 @@ log() {
 }
 
 log_info() {
-    log "INFO" "$@"
-    echo -e "${GREEN}[INFO]${NC} $@"
+    log "INFO" "$@" >&2
+    echo -e "${GREEN}[INFO]${NC} $@" >&2
 }
 
 log_error() {
@@ -65,8 +78,8 @@ log_error() {
 }
 
 log_warn() {
-    log "WARN" "$@"
-    echo -e "${YELLOW}[WARN]${NC} $@"
+    log "WARN" "$@" >&2
+    echo -e "${YELLOW}[WARN]${NC} $@" >&2
 }
 
 # Find latest backup
@@ -84,7 +97,7 @@ find_latest_backup() {
         search_paths="${BACKUP_ROOT}/full ${BACKUP_ROOT}/daily"
     fi
 
-    local latest_backup=$(find ${search_paths} -name "backup_*.sql*" -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | awk '{print $2}')
+    local latest_backup=$(find ${search_paths} -name "backup_*.sql" -type f -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | awk '{print $2}')
 
     if [ -z "$latest_backup" ]; then
         log_error "No backups found"
@@ -110,7 +123,7 @@ find_backup_by_date() {
     local search_path2="${BACKUP_ROOT}/daily/${year}/${month}/${day}"
 
     # Prefer full backup, fall back to daily
-    local backup_file=$(find "${search_path1}" "${search_path2}" -name "backup_*.sql*" -type f 2>/dev/null | head -1)
+    local backup_file=$(find "${search_path1}" "${search_path2}" -name "backup_*.sql" -type f 2>/dev/null | head -1)
 
     if [ -z "$backup_file" ]; then
         log_error "No backup found for date: ${target_date}"
@@ -127,11 +140,21 @@ validate_backup() {
 
     log_info "Validating backup: ${backup_file}"
 
+    # Handle relative paths from backup root
+    local full_path="${backup_file}"
+    if [[ ! "${backup_file}" == /* ]]; then
+        # Relative path - resolve from BACKUP_ROOT
+        full_path="${BACKUP_ROOT}/${backup_file}"
+    fi
+
     # Check if file exists
-    if [ ! -f "${backup_file}" ]; then
-        log_error "Backup file not found: ${backup_file}"
+    if [ ! -f "${full_path}" ]; then
+        log_error "Backup file not found: ${full_path}"
         return 1
     fi
+
+    # Use resolved full path for the rest of the function
+    backup_file="${full_path}"
 
     # Handle compressed files
     local test_file="${backup_file}"
@@ -149,9 +172,18 @@ validate_backup() {
 
     # Validate PostgreSQL format
     log_info "Checking PostgreSQL format..."
-    local basename_file=$(basename "${test_file}")
 
-    if docker compose exec -T db pg_restore --list "/backups/${basename_file}" > /dev/null 2>&1; then
+    # Calculate the relative path from BACKUP_ROOT for Docker mount
+    local docker_path="/backups"
+    if [[ "${backup_file}" == "${BACKUP_ROOT}"/* ]]; then
+        # Remove BACKUP_ROOT prefix to get relative path
+        local relative_path="${backup_file#${BACKUP_ROOT}/}"
+        docker_path="/backups/${relative_path}"
+    else
+        docker_path="/backups/$(basename "${test_file}")"
+    fi
+
+    if docker compose exec -T db pg_restore --list "${docker_path}" > /dev/null 2>&1; then
         log_info "✓ PostgreSQL format valid"
     else
         log_error "✗ Invalid PostgreSQL backup format"
@@ -167,7 +199,7 @@ validate_backup() {
     # Verify checksum if available
     if [ -f "${backup_file}.md5" ]; then
         log_info "Verifying checksum..."
-        local stored_checksum=$(cat "${backup_file}.md5")
+        local stored_checksum=$(cat "${backup_file}.md5" | awk '{print $1}')
         local actual_checksum=$(md5sum "${backup_file}" | awk '{print $1}')
 
         if [ "${stored_checksum}" == "${actual_checksum}" ]; then
@@ -245,21 +277,35 @@ perform_restore() {
         fi
     fi
 
+    # Resolve full path if relative
+    local full_backup_path="${backup_file}"
+    if [[ ! "${backup_file}" == /* ]]; then
+        # Relative path - resolve from BACKUP_ROOT
+        full_backup_path="${BACKUP_ROOT}/${backup_file}"
+    fi
+
     # Handle compressed backups
-    local restore_file="${backup_file}"
+    local restore_file="${full_backup_path}"
     local cleanup_decompressed=false
 
-    if [[ "${backup_file}" == *.gz ]]; then
+    if [[ "${full_backup_path}" == *.gz ]]; then
         log_info "Decompressing backup for restore..."
-        restore_file="${backup_file%.gz}"
+        restore_file="${full_backup_path%.gz}"
 
         if [ ! -f "${restore_file}" ]; then
-            gunzip -k "${backup_file}"
+            gunzip -k "${full_backup_path}"
             cleanup_decompressed=true
         fi
     fi
 
-    local basename_file=$(basename "${restore_file}")
+    # Calculate docker path from the resolved path
+    local docker_path="/backups"
+    if [[ "${restore_file}" == "${BACKUP_ROOT}"/* ]]; then
+        local relative_path="${restore_file#${BACKUP_ROOT}/}"
+        docker_path="/backups/${relative_path}"
+    else
+        docker_path="/backups/$(basename "${restore_file}")"
+    fi
 
     # Confirm restore
     echo ""
@@ -280,7 +326,7 @@ perform_restore() {
     fi
 
     # Perform restore
-    log_info "Restoring database from: ${basename_file}"
+    log_info "Restoring database from: $(basename ${restore_file})"
     log_info "This may take several minutes..."
 
     docker compose exec -T db pg_restore \
@@ -289,7 +335,7 @@ perform_restore() {
         --clean \
         --if-exists \
         -v \
-        "/backups/${basename_file}" 2>&1 | tee -a "${RESTORE_LOG}"
+        "${docker_path}" 2>&1 | tee -a "${RESTORE_LOG}"
 
     local restore_exit_code=${PIPESTATUS[0]}
 
@@ -396,48 +442,69 @@ interactive_restore() {
 send_email_notification() {
     local status=$1
     local backup_file=$2
-    local details=$3
+    local restore_duration=$3
 
     if [ "$EMAIL_ENABLED" != "true" ]; then
         return 0
     fi
 
-    if ! command -v mail &> /dev/null && ! command -v mailx &> /dev/null; then
-        log_warn "Email notification skipped: mail command not available"
-        return 1
-    fi
-
-    local MAIL_CMD="mail"
-    if command -v mailx &> /dev/null; then
-        MAIL_CMD="mailx"
-    fi
-
     local subject
+    local email_body
+
     if [ "$status" == "success" ]; then
-        subject="${EMAIL_SUBJECT_PREFIX} SUCCESS - Database Restored"
+        subject="${EMAIL_SUBJECT_PREFIX} [RESTORE] Database Restored Successfully"
+        email_body=$(python3 << PYTHON_EOF
+import sys
+sys.path.insert(0, '$BASE_DIR')
+from scripts.email.email_templates import format_restore_success
+
+backup_file = '''$backup_file'''
+restore_duration = '''$restore_duration'''
+
+print(format_restore_success(backup_file.strip(), restore_duration.strip()))
+PYTHON_EOF
+)
     else
-        subject="${EMAIL_SUBJECT_PREFIX} FAILURE - Restore Failed"
+        subject="${EMAIL_SUBJECT_PREFIX} [RESTORE] Database Restore Failed - Action Required"
+        email_body=$(python3 << PYTHON_EOF
+import sys
+sys.path.insert(0, '$BASE_DIR')
+from scripts.email.email_templates import format_restore_failure
+
+backup_file = '''$backup_file'''
+error_msg = "See logs/restore-backup.log for details"
+
+print(format_restore_failure(backup_file.strip(), error_msg))
+PYTHON_EOF
+)
     fi
 
-    local email_body=$(cat <<EOF
-GPS Tracker Restore Report
-==========================================
+    # Try using the SMTP relay script from scripts/email directory
+    local SEND_EMAIL_SCRIPT="${BASE_DIR}/scripts/email/send-email.sh"
+    if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${RESTORE_LOG}"
+        return 0
+    fi
 
-Status: ${status^^}
-Timestamp: $(date '+%Y-%m-%d %H:%M:%S')
-Server: $(hostname)
+    # Fallback to parent directory for backward compatibility
+    SEND_EMAIL_SCRIPT="$(dirname "${BASE_DIR}")/send-email.sh"
+    if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${RESTORE_LOG}"
+        return 0
+    fi
 
-${details}
+    # Final fallback to mail command if available
+    if command -v mail &> /dev/null || command -v mailx &> /dev/null; then
+        local MAIL_CMD="mail"
+        if command -v mailx &> /dev/null; then
+            MAIL_CMD="mailx"
+        fi
+        echo "$email_body" | $MAIL_CMD -s "$subject" "$EMAIL_RECIPIENT" 2>&1 | tee -a "${RESTORE_LOG}"
+        return 0
+    fi
 
-Backup File: ${backup_file}
-Log File: ${RESTORE_LOG}
-
-==========================================
-This is an automated notification from the GPS Tracker restore system.
-EOF
-)
-
-    echo "$email_body" | $MAIL_CMD -s "$subject" "$EMAIL_RECIPIENT" 2>&1 | tee -a "${RESTORE_LOG}"
+    log_warn "Email notification skipped: no mail delivery method available"
+    return 1
 }
 
 # Main function
@@ -495,7 +562,7 @@ main() {
             ;;
         --help)
             cat <<EOF
-GPS Tracker Smart Restore Script
+Maps Tracker Smart Restore Script
 
 Usage: $0 [COMMAND] [OPTIONS]
 

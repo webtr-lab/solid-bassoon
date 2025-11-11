@@ -14,16 +14,28 @@
 # Note: We don't use 'set -e' to allow partial backups to succeed
 # Individual backup failures are tracked and reported in the summary
 
-# Configuration
-REMOTE_USER="demo"
-REMOTE_HOST="192.168.100.74"
-REMOTE_BASE_DIR="~/gps-tracker-backup"  # Using home directory (no sudo required)
-LOCAL_BASE_DIR="/home/demo/effective-guide"
+# Automatically detect the project directory (scripts/backup -> scripts -> effective-guide)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOCAL_BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 
-# Email notification settings
-EMAIL_ENABLED=true
-EMAIL_RECIPIENT="demo@praxisnetworking.com"
-EMAIL_SUBJECT_PREFIX="[GPS Tracker Backup]"
+# Load .env if it exists for environment variables
+if [ -f "${LOCAL_BASE_DIR}/.env" ]; then
+    set +a
+    source "${LOCAL_BASE_DIR}/.env"
+    set -a
+fi
+
+# Remote backup configuration (from .env or defaults)
+REMOTE_USER="${REMOTE_BACKUP_USER:-demo}"
+REMOTE_HOST="${REMOTE_BACKUP_HOST:-192.168.100.74}"
+REMOTE_BASE_DIR="${REMOTE_BACKUP_DIR:-~/maps-tracker-backup}"  # Using home directory (no sudo required)
+REMOTE_SSH_PORT="${REMOTE_BACKUP_SSH_PORT:-22}"
+REMOTE_BACKUP_ENABLED="${REMOTE_BACKUP_ENABLED:-false}"
+
+# Email notification settings (from .env or defaults)
+EMAIL_ENABLED="${BACKUP_EMAIL_ENABLED:-true}"
+EMAIL_RECIPIENT="${BACKUP_EMAIL:-admin@example.com}"
+EMAIL_SUBJECT_PREFIX="[Maps Tracker Backup]"
 
 # Directories to backup (new organized structure)
 BACKUP_DIR="${LOCAL_BASE_DIR}/backups"  # Root backup directory
@@ -94,16 +106,16 @@ check_requirements() {
 
 # Test SSH connection to remote server
 test_ssh_connection() {
-    log_info "Testing SSH connection to ${REMOTE_USER}@${REMOTE_HOST}..."
+    log_info "Testing SSH connection to ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_SSH_PORT}..."
 
-    if ssh -o BatchMode=yes -o ConnectTimeout=10 "${REMOTE_USER}@${REMOTE_HOST}" "echo 'SSH connection successful'" &> /dev/null; then
+    if ssh -o BatchMode=yes -o ConnectTimeout=10 -p "${REMOTE_SSH_PORT}" "${REMOTE_USER}@${REMOTE_HOST}" "echo 'SSH connection successful'" &> /dev/null; then
         log_info "SSH connection test passed"
         return 0
     else
         log_error "SSH connection failed. Please check:"
         log_error "  1. SSH keys are properly configured"
         log_error "  2. Remote host is reachable: ping ${REMOTE_HOST}"
-        log_error "  3. SSH service is running on remote host"
+        log_error "  3. SSH service is running on remote host (port ${REMOTE_SSH_PORT})"
         log_error "  4. Remote user exists: ${REMOTE_USER}"
         exit 1
     fi
@@ -113,12 +125,15 @@ test_ssh_connection() {
 setup_remote_directories() {
     log_info "Setting up remote directories..."
 
-    ssh "${REMOTE_USER}@${REMOTE_HOST}" "mkdir -p ${REMOTE_BASE_DIR}/{backups,logs}" 2>&1 | tee -a "${SCRIPT_LOG}"
+    # Use single quotes to allow tilde expansion on remote side
+    ssh -p "${REMOTE_SSH_PORT}" "${REMOTE_USER}@${REMOTE_HOST}" 'mkdir -p '"${REMOTE_BASE_DIR}"'/{backups,logs}' 2>&1 | tee -a "${SCRIPT_LOG}"
 
-    if [ ${PIPESTATUS[0]} -eq 0 ]; then
+    # Check the SSH exit code (first element of PIPESTATUS)
+    local ssh_exit_code=${PIPESTATUS[0]}
+    if [ ${ssh_exit_code} -eq 0 ]; then
         log_info "Remote directories created/verified"
     else
-        log_error "Failed to create remote directories"
+        log_error "Failed to create remote directories (SSH exit code: ${ssh_exit_code})"
         exit 1
     fi
 }
@@ -126,97 +141,93 @@ setup_remote_directories() {
 # Send email notification with backup status
 send_email_notification() {
     local status=$1
-    local backup_success=$2
-    local backup_failed=$3
+    local backup_count=$2
+    local total_size=$3
     local duration=$4
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
     # Check if email is enabled
     if [ "$EMAIL_ENABLED" != "true" ]; then
         return 0
     fi
 
-    # Check if mail command is available
-    if ! command -v mail &> /dev/null && ! command -v mailx &> /dev/null; then
-        log_warn "Email notification skipped: mail command not available"
-        log_warn "Install with: sudo apt-get install mailutils"
-        return 1
-    fi
-
-    # Determine mail command
-    local MAIL_CMD="mail"
-    if command -v mailx &> /dev/null; then
-        MAIL_CMD="mailx"
-    fi
+    local subject
+    local email_body
 
     # Determine status and subject
-    local subject
-    local status_emoji
     if [ "$status" == "success" ]; then
-        subject="${EMAIL_SUBJECT_PREFIX} SUCCESS - Remote Backup Completed"
-        status_emoji="✅"
-    else
-        subject="${EMAIL_SUBJECT_PREFIX} FAILURE - Remote Backup Failed"
-        status_emoji="❌"
-    fi
+        subject="${EMAIL_SUBJECT_PREFIX} [RSYNC] Remote Backup Sync Completed Successfully"
+        email_body=$(python3 << PYTHON_EOF
+import sys
+sys.path.insert(0, '$LOCAL_BASE_DIR')
+from scripts.email.email_templates import format_remote_sync_success
 
-    # Get disk usage information
-    local local_backups_size=$(du -sh "${BACKUP_DIR}" 2>/dev/null | cut -f1 || echo "N/A")
-    local local_logs_size=$(du -sh "${LOGS_DIR}" 2>/dev/null | cut -f1 || echo "N/A")
+backup_count = '''$backup_count'''
+total_size = '''$total_size'''
+duration = '''$duration'''
+remote_host = '''$REMOTE_HOST'''
 
-    # Format email body
-    local email_body=$(cat <<EOF
-${status_emoji} GPS Tracker Remote Backup Report
-==========================================
-
-Status: ${status^^}
-Timestamp: ${timestamp}
-Server: $(hostname)
-
-Backup Summary
---------------
-Successful backups: ${backup_success}
-Failed backups: ${backup_failed}
-Duration: ${duration} seconds ($(printf '%dm %ds' $((duration/60)) $((duration%60))))
-
-Remote Server
--------------
-Host: ${REMOTE_USER}@${REMOTE_HOST}
-Location: ${REMOTE_BASE_DIR}
-
-Local Data Sizes
-----------------
-Database Backups: ${local_backups_size}
-Application Logs: ${local_logs_size}
-
-Log File
---------
-${SCRIPT_LOG}
-
-$(if [ "$status" == "success" ]; then
-    echo "All backup operations completed successfully."
-else
-    echo "Some backup operations failed. Please review the log file for details:"
-    echo ""
-    echo "View errors: grep ERROR ${SCRIPT_LOG} | tail -20"
-    echo "Full log: cat ${SCRIPT_LOG}"
-fi)
-
-==========================================
-This is an automated notification from the GPS Tracker backup system.
-EOF
+print(format_remote_sync_success(backup_count.strip(), total_size.strip(), duration.strip(), remote_host.strip()))
+PYTHON_EOF
 )
+    else
+        subject="${EMAIL_SUBJECT_PREFIX} [RSYNC] Remote Backup Sync Failed - Action Required"
+        email_body=$(python3 << PYTHON_EOF
+import sys
+sys.path.insert(0, '$LOCAL_BASE_DIR')
+from scripts.email.email_templates import format_remote_sync_failure
+
+remote_host = '''$REMOTE_HOST'''
+error_msg = "See logs/rsync-backup.log for details"
+
+print(format_remote_sync_failure(error_msg, remote_host.strip()))
+PYTHON_EOF
+)
+    fi
 
     # Send email
     log_info "Sending email notification to ${EMAIL_RECIPIENT}..."
-    echo "$email_body" | $MAIL_CMD -s "$subject" "$EMAIL_RECIPIENT" 2>&1 | tee -a "${SCRIPT_LOG}"
 
-    if [ ${PIPESTATUS[1]} -eq 0 ]; then
-        log_info "Email notification sent successfully"
-    else
-        log_error "Failed to send email notification"
-        return 1
+    # Try using the SMTP relay script from scripts/email directory
+    local SEND_EMAIL_SCRIPT="${LOCAL_BASE_DIR}/scripts/email/send-email.sh"
+    if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${SCRIPT_LOG}"
+        if [ ${PIPESTATUS[0]} -eq 0 ]; then
+            log_info "Email notification sent successfully"
+            return 0
+        else
+            log_error "Failed to send email notification"
+            return 1
+        fi
     fi
+
+    # Fallback to parent directory for backward compatibility
+    SEND_EMAIL_SCRIPT="$(dirname "${LOCAL_BASE_DIR}")/send-email.sh"
+    if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${SCRIPT_LOG}"
+        if [ ${PIPESTATUS[0]} -eq 0 ]; then
+            log_info "Email notification sent successfully"
+            return 0
+        else
+            log_error "Failed to send email notification"
+            return 1
+        fi
+    fi
+
+    # Fall back to mail command if available
+    if command -v mail &> /dev/null || command -v mailx &> /dev/null; then
+        local MAIL_CMD="mail"
+        if command -v mailx &> /dev/null; then
+            MAIL_CMD="mailx"
+        fi
+        echo "$email_body" | $MAIL_CMD -s "$subject" "$EMAIL_RECIPIENT" 2>&1 | tee -a "${SCRIPT_LOG}"
+        if [ ${PIPESTATUS[1]} -eq 0 ]; then
+            log_info "Email notification sent successfully"
+            return 0
+        fi
+    fi
+
+    log_warn "Email notification skipped: no mail delivery method available"
+    return 1
 }
 
 # Verify checksums after backup (supports nested directory structure)
@@ -245,8 +256,9 @@ verify_backup_checksums() {
         local rel_path=$(realpath --relative-to="${source_dir}" "${source_file}")
 
         # Get remote checksum
-        local remote_checksum=$(ssh "${REMOTE_USER}@${REMOTE_HOST}" \
-            "md5sum ${REMOTE_BASE_DIR}/${dest_name}/${rel_path} 2>/dev/null" | awk '{print $1}')
+        # Use single quotes to allow tilde expansion on remote side
+        local remote_checksum=$(ssh -p "${REMOTE_SSH_PORT}" "${REMOTE_USER}@${REMOTE_HOST}" \
+            'md5sum '"${REMOTE_BASE_DIR}"'/'${dest_name}'/'${rel_path}' 2>/dev/null' | awk '{print $1}')
 
         if [ -z "${remote_checksum}" ]; then
             log_warn "Could not verify checksum for ${rel_path} (file may not exist on remote)"
@@ -308,7 +320,7 @@ backup_directory() {
         --delete \
         --stats \
         --human-readable \
-        -e "ssh -o BatchMode=yes -o ConnectTimeout=10" \
+        -e "ssh -p ${REMOTE_SSH_PORT} -o BatchMode=yes -o ConnectTimeout=10" \
         "${source_dir}/" \
         "${remote_dest}" 2>&1 | tee -a "${SCRIPT_LOG}"
 

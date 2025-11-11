@@ -64,7 +64,7 @@ with app.app_context():
         admin_password = bcrypt.generate_password_hash(default_password).decode('utf-8')
         admin_user = User(
             username='admin',
-            email='admin@gpstracker.local',
+            email='admin@mapstracker.local',
             password_hash=admin_password,
             role='admin',
             must_change_password=True
@@ -80,7 +80,7 @@ with app.app_context():
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    return jsonify({'status': 'healthy', 'message': 'GPS Tracker API is running'})
+    return jsonify({'status': 'healthy', 'message': 'Maps Tracker API is running'})
 
 @app.route('/api/auth/default-credentials', methods=['GET'])
 def check_default_credentials():
@@ -201,8 +201,8 @@ def receive_gps():
     db.session.add(location)
     detect_and_save_stops(vehicle.id, location)
     db.session.commit()
-    
-    return jsonify({'message': 'GPS data received', 'vehicle': vehicle.name, 'location_id': location.id}), 201
+
+    return jsonify({'message': 'Location data received', 'vehicle': vehicle.name, 'location_id': location.id}), 201
 
 def detect_and_save_stops(vehicle_id, current_location):
     time_window = datetime.utcnow() - timedelta(minutes=10)
@@ -831,7 +831,7 @@ def geocode_address():
 
         req = urllib.request.Request(url)
         # Nominatim requires a valid User-Agent
-        req.add_header('User-Agent', 'GPS-Tracker-Suriname/1.0 (Vehicle Tracking System)')
+        req.add_header('User-Agent', 'Maps-Tracker-Suriname/1.0 (Vehicle Tracking System)')
         # Note: Don't set Accept header - Nominatim returns format based on 'format=' param
         req.add_header('Accept-Language', 'en')
 

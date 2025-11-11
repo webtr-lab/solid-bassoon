@@ -1,6 +1,6 @@
-# GPS Tracker Application
+# Maps Tracker Application
 
-A full-stack GPS tracking application with real-time vehicle monitoring, location history, and places of interest management.
+A full-stack Maps tracking application with real-time vehicle monitoring, location history, and places of interest management.
 
 ## Features
 
@@ -8,7 +8,7 @@ A full-stack GPS tracking application with real-time vehicle monitoring, locatio
 - **Location History**: View historical routes with configurable time windows
 - **Automatic Stop Detection**: Detects when vehicles are stationary for 5+ minutes
 - **Places of Interest**: Manage and track important locations
-- **Mobile Interface**: GPS data submission from mobile devices
+- **Mobile Interface**: Location data submission from mobile devices
 - **Visit Reports**: Analytics showing which places were visited by which vehicles
 - **Role-based Access Control**: Admin, Manager, and Viewer roles
 - **Export Data**: Export location data in CSV or JSON format
@@ -68,11 +68,25 @@ Edit `.env` and configure the following:
 ```bash
 POSTGRES_PASSWORD=mySecurePassword123
 SECRET_KEY=$(openssl rand -hex 32)
-DATABASE_URL=postgresql://gpsadmin:mySecurePassword123@db:5432/gps_tracker
+DATABASE_URL=postgresql://mapsadmin:mySecurePassword123@db:5432/maps_tracker
 CORS_ORIGINS=http://localhost:3000,http://localhost:8080
 ```
 
-3. **Start the application**
+3. **Initialize Docker Volumes** (Important!)
+```bash
+./scripts/setup/init-docker-volumes.sh
+```
+
+This ensures logs, backups, and database directories are created with proper permissions. **Run this before starting Docker** to prevent permission errors when containers try to write files.
+
+4. **Download Nominatim Map Data** (Important!)
+```bash
+./scripts/setup/setup-nominatim.sh
+```
+
+This downloads the Suriname OpenStreetMap data (~15MB) required for the local geocoding service. **Run this before starting Docker** to avoid permission issues.
+
+5. **Start the application**
 ```bash
 docker compose up -d
 ```
@@ -82,8 +96,9 @@ This will start all services:
 - Flask backend API (port 5000)
 - React frontend (port 80/443)
 - Mobile interface (port 8080/8443)
+- Nominatim Geocoding Service (port 8081)
 
-4. **Default admin credentials**
+6. **Default admin credentials**
 
 On first startup, the application automatically creates an admin user with default credentials:
 
@@ -102,9 +117,9 @@ You can verify the account was created by checking the logs:
 docker compose logs backend | grep -A 5 "IMPORTANT"
 ```
 
-5. **Access the application**
+7. **Access the application**
 - Frontend Dashboard: http://localhost (or http://localhost:3000 in dev mode)
-- Mobile GPS Sender: http://localhost:8080
+- Mobile Location Sender: http://localhost:8080
 - Backend API: http://localhost:5000
 - Nominatim Geocoding: http://localhost:8081
 
@@ -113,12 +128,12 @@ docker compose logs backend | grep -A 5 "IMPORTANT"
 docker compose logs nominatim -f
 ```
 
-Wait for the message "Nominatim is ready" before using geocoding features. See [docs/NOMINATIM_SETUP.md](docs/NOMINATIM_SETUP.md) for detailed configuration.
+Once the Nominatim container shows as "healthy", geocoding is ready. See [docs/NOMINATIM_SETUP.md](docs/NOMINATIM_SETUP.md) for detailed configuration and [docs/DEPLOYMENT_TROUBLESHOOTING.md](docs/DEPLOYMENT_TROUBLESHOOTING.md) for troubleshooting.
 
-6. **First Login and Setup**
+8. **First Login and Setup**
 
 - Navigate to the frontend URL
-- Log in with the admin credentials from step 4
+- Log in with the admin credentials from step 6
 - **Change your admin password immediately** via the Admin Panel → Users section
 - Add your vehicles in the Admin Panel
 - (Optional) Add places of interest for visit tracking
@@ -141,8 +156,8 @@ For production, use Let's Encrypt or your certificate provider.
 
 2. **Update .env for production**
 ```bash
-DOMAIN=gps.yourdomain.com
-CORS_ORIGINS=https://gps.yourdomain.com
+DOMAIN=maps.yourdomain.com
+CORS_ORIGINS=https://maps.yourdomain.com
 FLASK_ENV=production
 ```
 
@@ -209,7 +224,7 @@ See [CLAUDE.md](CLAUDE.md) for detailed API endpoints and architecture documenta
 
 ### Key Endpoints
 
-- `POST /api/gps` - Receive GPS data from devices
+- `POST /api/gps` - Receive location data from devices
 - `GET /api/vehicles` - List all vehicles
 - `GET /api/vehicles/{id}/history` - Get vehicle location history
 - `GET /api/places-of-interest` - List places of interest
@@ -233,7 +248,7 @@ See [CLAUDE.md](CLAUDE.md) for detailed API endpoints and architecture documenta
 │   │   └── main.jsx     # Entry point
 │   ├── Dockerfile
 │   └── package.json
-├── mobile/              # Mobile GPS sender interface
+├── mobile/              # Mobile location sender interface
 │   └── index.html       # Standalone HTML app
 ├── scripts/             # Operational scripts
 │   ├── backup/          # Backup and restore scripts
@@ -299,7 +314,7 @@ docker compose up -d
 
 ## API Usage Examples
 
-### Submit GPS Data
+### Submit Location Data
 
 ```bash
 curl -X POST http://localhost:5000/api/gps \
@@ -394,7 +409,7 @@ For production environments, use the backup manager with organized retention:
 ### Manual Backup (Direct Database)
 
 ```bash
-docker compose exec db pg_dump -U gpsadmin gps_tracker > backup_$(date +%Y%m%d_%H%M%S).sql
+docker compose exec db pg_dump -U mapsadmin maps_tracker > backup_$(date +%Y%m%d_%H%M%S).sql
 ```
 
 ### Restore from Backup
@@ -428,7 +443,7 @@ docker compose exec db pg_dump -U gpsadmin gps_tracker > backup_$(date +%Y%m%d_%
 
 **Manual Restore (Direct Database):**
 ```bash
-docker compose exec -T db psql -U gpsadmin gps_tracker < backup_file.sql
+docker compose exec -T db psql -U mapsadmin maps_tracker < backup_file.sql
 ```
 
 **From Admin Dashboard:**
@@ -513,6 +528,29 @@ tail -f logs/health-check.log
 - Configurable cron schedule (default: daily at 2:00 AM)
 
 See [docs/HEALTH_CHECK.md](docs/HEALTH_CHECK.md) for complete documentation.
+
+## Troubleshooting
+
+If you encounter issues during deployment or operation:
+
+1. **Nominatim service not starting** - See [docs/DEPLOYMENT_TROUBLESHOOTING.md](docs/DEPLOYMENT_TROUBLESHOOTING.md#nominatim-service-issues)
+2. **Database connection issues** - See [docs/DEPLOYMENT_TROUBLESHOOTING.md](docs/DEPLOYMENT_TROUBLESHOOTING.md#database-issues)
+3. **Frontend or backend errors** - Check logs with `docker compose logs -f`
+4. **Permission errors** - Common with Docker volumes - See [docs/DEPLOYMENT_TROUBLESHOOTING.md](docs/DEPLOYMENT_TROUBLESHOOTING.md#permission-denied-errors)
+
+**Quick diagnostics:**
+```bash
+# Check all services
+docker compose ps
+
+# View all logs
+docker compose logs | head -100
+
+# Run health check
+./scripts/monitoring/health-check.sh
+```
+
+See [docs/DEPLOYMENT_TROUBLESHOOTING.md](docs/DEPLOYMENT_TROUBLESHOOTING.md) for comprehensive troubleshooting guide.
 
 ## License
 

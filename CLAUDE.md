@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a GPS tracking application with real-time vehicle monitoring, location history, and place of interest management. The system consists of a Flask backend, React frontend, and a separate mobile interface for GPS data submission.
+This is a Maps tracking application with real-time vehicle monitoring, location history, and place of interest management. The system consists of a Flask backend, React frontend, and a separate mobile interface for location data submission.
 
 ## Architecture
 
@@ -38,14 +38,14 @@ This is a GPS tracking application with real-time vehicle monitoring, location h
 
 - **User**: Authentication with roles (admin/manager/viewer)
 - **Vehicle**: Tracked vehicles with unique device_id
-- **Location**: GPS coordinates with timestamp and speed
+- **Location**: Coordinates with timestamp and speed
 - **SavedLocation**: Detected stops or manually saved locations
 - **PlaceOfInterest**: Points of interest with full contact details
 
 ### Key Backend Features
 
 - **Stop Detection** (`detect_and_save_stops()` in main.py): Automatically saves locations when vehicle stays within 50m for 5+ minutes
-- **Distance Calculation** (`calculate_distance()` in main.py): Haversine formula for precise GPS distance
+- **Distance Calculation** (`calculate_distance()` in main.py): Haversine formula for precise coordinate distance
 - **Visit Reports** (`/api/reports/visits` endpoint): Matches saved locations to places of interest within 200m threshold
 - **Geocoding** (`/api/geocode` endpoint): Uses local Nominatim instance for instant address lookup (configurable via NOMINATIM_URL)
 
@@ -83,7 +83,7 @@ python -m flask --app app.main:app run --host=0.0.0.0 --port=5000
 ### Logging
 
 Application logs are persisted to the `logs/` directory:
-- **logs/app.log** - General application logs (startup, database, GPS events, backups)
+- **logs/app.log** - General application logs (startup, database, location events, backups)
 - **logs/error.log** - Errors only
 - **logs/access.log** - HTTP request/response logs
 
@@ -96,7 +96,7 @@ tail -f logs/app.log
 # View errors
 grep "ERROR" logs/error.log
 
-# View GPS submissions
+# View location submissions
 grep "api/gps" logs/access.log
 
 # View stop detections
@@ -162,7 +162,7 @@ Copy `.env.example` to `.env` and configure:
 - POST /api/auth/change-password - Change user password
 - GET /api/auth/default-credentials - Check if default credentials should be displayed
 
-### GPS Data
+### Location Data
 - POST /api/gps - Receive location data from devices (requires device_id, latitude, longitude)
 
 ### Vehicles

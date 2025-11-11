@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# GPS Tracker Backup Manager
+# Maps Tracker Backup Manager
 # Manages organized full and daily backups with 6-month retention
 #
 # Features:
@@ -24,7 +24,9 @@
 set -e
 
 # Configuration
-BASE_DIR="/home/demo/effective-guide"
+# Automatically detect the project directory (scripts/backup -> scripts -> effective-guide)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 BACKUP_ROOT="${BASE_DIR}/backups"
 LOG_DIR="${BASE_DIR}/logs"
 BACKUP_LOG="${LOG_DIR}/backup-manager.log"
@@ -40,15 +42,22 @@ RETENTION_DAYS=180          # 6 months
 ARCHIVE_AFTER_DAYS=30       # Compress backups older than 30 days
 FULL_BACKUP_DAY=0           # Sunday (0=Sunday, 1=Monday, etc.)
 
-# Database settings
-DB_USER="gpsadmin"
-DB_NAME="gps_tracker"
-DB_CONTAINER="effective-guide-db-1"
+# Load .env if it exists for environment variables
+if [ -f "${BASE_DIR}/.env" ]; then
+    set +a
+    source "${BASE_DIR}/.env"
+    set -a
+fi
 
-# Email settings
-EMAIL_ENABLED=true
-EMAIL_RECIPIENT="demo@praxisnetworking.com"
-EMAIL_SUBJECT_PREFIX="[GPS Tracker Backup]"
+# Database settings (from .env or with defaults)
+DB_USER="${POSTGRES_USER:-gpsadmin}"
+DB_NAME="${POSTGRES_DB:-gps_tracker}"
+DB_CONTAINER="maps_db"
+
+# Email settings (from .env or with defaults)
+EMAIL_ENABLED="${BACKUP_EMAIL_ENABLED:-true}"
+EMAIL_RECIPIENT="${BACKUP_EMAIL:-admin@example.com}"
+EMAIL_SUBJECT_PREFIX="[Maps Tracker Backup]"
 
 # Colors
 RED='\033[0;31m'
@@ -575,50 +584,73 @@ send_email_notification() {
     local status=$1
     local backup_type=$2
     local backup_file=$3
-    local details=$4
+    local backup_size=$4
 
     if [ "$EMAIL_ENABLED" != "true" ]; then
         return 0
     fi
 
-    if ! command -v mail &> /dev/null && ! command -v mailx &> /dev/null; then
-        log_warn "Email notification skipped: mail command not available"
-        return 1
-    fi
-
-    local MAIL_CMD="mail"
-    if command -v mailx &> /dev/null; then
-        MAIL_CMD="mailx"
-    fi
-
     local subject
+    local email_body
+
     if [ "$status" == "success" ]; then
-        subject="${EMAIL_SUBJECT_PREFIX} SUCCESS - ${backup_type} Backup Completed"
+        subject="${EMAIL_SUBJECT_PREFIX} [${backup_type}] Backup Completed Successfully"
+        # Use Python to generate professional email template
+        email_body=$(python3 << PYTHON_EOF
+import sys
+sys.path.insert(0, '$BASE_DIR')
+from scripts.email.email_templates import format_backup_success
+import os
+
+backup_file = '''$backup_file'''
+backup_size = '''$backup_size'''
+backup_type = '''$backup_type'''
+
+print(format_backup_success(backup_type.strip(), backup_file.strip(), backup_size.strip()))
+PYTHON_EOF
+)
     else
-        subject="${EMAIL_SUBJECT_PREFIX} FAILURE - ${backup_type} Backup Failed"
+        subject="${EMAIL_SUBJECT_PREFIX} [${backup_type}] Backup Failed - Action Required"
+        error_msg="See logs/backup-manager.log for details"
+        email_body=$(python3 << PYTHON_EOF
+import sys
+sys.path.insert(0, '$BASE_DIR')
+from scripts.email.email_templates import format_backup_failure
+
+backup_type = '''$backup_type'''
+error_msg = '''$error_msg'''
+
+print(format_backup_failure(backup_type.strip(), error_msg.strip()))
+PYTHON_EOF
+)
     fi
 
-    local email_body=$(cat <<EOF
-GPS Tracker Backup Report
-==========================================
+    # Try using the SMTP relay script from scripts/email directory
+    local SEND_EMAIL_SCRIPT="${BASE_DIR}/scripts/email/send-email.sh"
+    if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${BACKUP_LOG}"
+        return 0
+    fi
 
-Status: ${status^^}
-Backup Type: ${backup_type^^}
-Timestamp: $(date '+%Y-%m-%d %H:%M:%S')
-Server: $(hostname)
+    # Fallback to parent directory for backward compatibility
+    SEND_EMAIL_SCRIPT="$(dirname "${BASE_DIR}")/send-email.sh"
+    if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${BACKUP_LOG}"
+        return 0
+    fi
 
-${details}
+    # Final fallback to mail command if available
+    if command -v mail &> /dev/null || command -v mailx &> /dev/null; then
+        local MAIL_CMD="mail"
+        if command -v mailx &> /dev/null; then
+            MAIL_CMD="mailx"
+        fi
+        echo "$email_body" | $MAIL_CMD -s "$subject" "$EMAIL_RECIPIENT" 2>&1 | tee -a "${BACKUP_LOG}"
+        return 0
+    fi
 
-Backup File: ${backup_file}
-
-Log File: ${BACKUP_LOG}
-
-==========================================
-This is an automated notification from the GPS Tracker backup system.
-EOF
-)
-
-    echo "$email_body" | $MAIL_CMD -s "$subject" "$EMAIL_RECIPIENT" 2>&1 | tee -a "${BACKUP_LOG}"
+    log_warn "Email notification skipped: no mail delivery method available"
+    return 1
 }
 
 # Main function
@@ -630,10 +662,24 @@ main() {
 
     case "$command" in
         --full)
-            create_full_backup
+            local backup_file=$(create_full_backup)
+            if [ $? -eq 0 ] && [ -n "$backup_file" ]; then
+                local backup_size=$(stat -c%s "${backup_file}" 2>/dev/null || stat -f%z "${backup_file}" || echo "0")
+                local size_human=$(numfmt --to=iec-i --suffix=B ${backup_size} 2>/dev/null || echo "${backup_size} bytes")
+                send_email_notification "success" "FULL" "$backup_file" "$size_human"
+            else
+                send_email_notification "failure" "FULL" "unknown" "Full backup failed"
+            fi
             ;;
         --daily)
-            create_daily_backup
+            local backup_file=$(create_daily_backup)
+            if [ $? -eq 0 ] && [ -n "$backup_file" ]; then
+                local backup_size=$(stat -c%s "${backup_file}" 2>/dev/null || stat -f%z "${backup_file}" || echo "0")
+                local size_human=$(numfmt --to=iec-i --suffix=B ${backup_size} 2>/dev/null || echo "${backup_size} bytes")
+                send_email_notification "success" "DAILY" "$backup_file" "$size_human"
+            else
+                send_email_notification "failure" "DAILY" "unknown" "Daily backup failed"
+            fi
             ;;
         --auto)
             auto_backup
@@ -649,7 +695,7 @@ main() {
             ;;
         --help)
             cat <<EOF
-GPS Tracker Backup Manager
+Maps Tracker Backup Manager
 
 Usage: $0 [COMMAND]
 

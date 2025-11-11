@@ -1,6 +1,6 @@
 # Application Logging Guide
 
-This document describes the logging system for the GPS Tracker application and how to use it for debugging.
+This document describes the logging system for the Maps Tracker application and how to use it for debugging.
 
 ## Overview
 
@@ -65,7 +65,7 @@ tail -100 logs/app.log
 # Search for specific errors
 grep "ERROR" logs/app.log
 
-# Search for GPS data submissions
+# Search for location data submissions
 grep "api/gps" logs/access.log
 
 # Search for stop detections
@@ -126,7 +126,7 @@ The application uses standard Python logging levels:
 [2025-10-30 10:00:00] WARNING in main: IMPORTANT: Default admin user created
 ```
 
-### GPS Data Reception
+### Location Data Reception
 ```
 [2025-10-30 10:05:00] INFO in logging_config: POST /api/gps - IP: 172.18.0.1
 [2025-10-30 10:05:00] INFO in logging_config: POST /api/gps - Status: 201
@@ -272,17 +272,17 @@ filebeat.inputs:
   paths:
     - /home/demo/effective-guide/logs/*.log
   fields:
-    application: gps-tracker
+    application: maps-tracker
 ```
 
 ### Grafana Loki
 ```yaml
-- job_name: gps-tracker
+- job_name: maps-tracker
   static_configs:
   - targets:
       - localhost
     labels:
-      job: gps-tracker
+      job: maps-tracker
       __path__: /home/demo/effective-guide/logs/*.log
 ```
 
@@ -293,7 +293,7 @@ filebeat.inputs:
 
 ERROR_COUNT=$(grep -c "ERROR" logs/app.log)
 if [ $ERROR_COUNT -gt 0 ]; then
-    mail -s "GPS Tracker Errors Detected" admin@example.com < logs/error.log
+    mail -s "Maps Tracker Errors Detected" admin@example.com < logs/error.log
 fi
 ```
 

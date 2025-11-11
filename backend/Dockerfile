@@ -17,6 +17,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
 
+# Create non-root user for running the application
+# This ensures files in mounted volumes are created with proper ownership
+RUN groupadd -r appuser && useradd -r -g appuser appuser && \
+    chown -R appuser:appuser /app && \
+    # Ensure logs and backups directories exist with proper permissions
+    mkdir -p /app/logs /app/backups && \
+    chmod 777 /app/logs /app/backups
+USER appuser
+
 EXPOSE 5000
 
 ENV PYTHONPATH=/app

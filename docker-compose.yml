@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:15-alpine
-    container_name: gps_db
+    container_name: maps_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -10,7 +10,7 @@ services:
       - ./database:/var/lib/postgresql/data
       - ./backups:/backups
     networks:
-      - gps-network
+      - maps-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -22,7 +22,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: gps_backend
+    container_name: maps_backend
     environment:
       DATABASE_URL: ${DATABASE_URL}
       SECRET_KEY: ${SECRET_KEY}
@@ -30,13 +30,14 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS}
       NOMINATIM_URL: ${NOMINATIM_URL}
     volumes:
-      - ./backups:/app/backups
-      - ./logs:/app/logs
+      - ./backups:/app/backups:z
+      - ./logs:/app/logs:z
+      - ./scripts:/app/scripts:ro
     depends_on:
       db:
         condition: service_healthy
     networks:
-      - gps-network
+      - maps-network
     restart: unless-stopped
     ports:
       - "0.0.0.0:5000:5000"
@@ -50,13 +51,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: gps_frontend
+    container_name: maps_frontend
     environment:
       - VITE_API_URL=https://${DOMAIN}/api
     depends_on:
       - backend
     networks:
-      - gps-network
+      - maps-network
     restart: unless-stopped
     volumes:
       - ./ssl:/etc/nginx/ssl:ro
@@ -67,13 +68,13 @@ services:
 
   mobile:
     image: nginx:alpine
-    container_name: gps_mobile
+    container_name: maps_mobile
     volumes:
       - ./mobile:/usr/share/nginx/html:ro
       - ./ssl:/etc/nginx/ssl:ro
       - ./mobile/nginx-https.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
-      - gps-network
+      - maps-network
     restart: unless-stopped
     ports:
       - "0.0.0.0:8080:80"
@@ -81,7 +82,7 @@ services:
 
   nominatim:
     image: mediagis/nominatim:4.4
-    container_name: gps_nominatim
+    container_name: maps_nominatim
     environment:
       # Nominatim configuration
       PBF_URL: file:///nominatim/data/suriname-latest.osm.pbf
@@ -96,7 +97,7 @@ services:
       - ./nominatim-data:/nominatim/data
       - nominatim-db:/var/lib/postgresql/14/main
     networks:
-      - gps-network
+      - maps-network
     restart: unless-stopped
     ports:
       - "0.0.0.0:8081:8080"
@@ -109,8 +110,22 @@ services:
       start_period: 300s
 
 networks:
-  gps-network:
+  maps-network:
     driver: bridge
 
 volumes:
   nominatim-db:
+
+# IMPORTANT: Volume Initialization
+# Before running 'docker compose up' for the first time, execute:
+#   ./scripts/setup/init-docker-volumes.sh
+#
+# This ensures logs, backups, and database directories are created with
+# proper permissions. Without this step, you may encounter permission errors
+# when containers try to write to these directories.
+#
+# The init script will:
+# - Create ./logs, ./backups, ./database, ./nominatim-data directories
+# - Set owner to current user
+# - Set permissions: 777 for logs/backups (world-writable), 700 for database
+# - Warn if containers are running and offer to stop them

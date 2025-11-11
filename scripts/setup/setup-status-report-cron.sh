@@ -5,7 +5,8 @@
 #
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STATUS_REPORT_SCRIPT="$SCRIPT_DIR/app-status-report.sh"
+BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
+STATUS_REPORT_SCRIPT="${BASE_DIR}/scripts/monitoring/app-status-report.sh"
 EMAIL_RECIPIENT="info@praxisnetworking.com"
 
 # Colors for output
@@ -15,7 +16,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}========================================${NC}"
-echo -e "${BLUE}GPS Tracker - Status Report Setup${NC}"
+echo -e "${BLUE}Maps Tracker - Status Report Setup${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 
@@ -95,8 +96,8 @@ case $choice in
 esac
 
 # Create cron job entry
-CRON_COMMENT="# GPS Tracker daily status report to ${EMAIL_RECIPIENT}"
-CRON_JOB="$CRON_SCHEDULE cd $SCRIPT_DIR && $STATUS_REPORT_SCRIPT >> $SCRIPT_DIR/logs/status-report.log 2>&1"
+CRON_COMMENT="# Maps Tracker daily status report to ${EMAIL_RECIPIENT}"
+CRON_JOB="$CRON_SCHEDULE cd $BASE_DIR && $STATUS_REPORT_SCRIPT >> $BASE_DIR/logs/status-report.log 2>&1"
 
 # Check if cron job already exists
 if crontab -l 2>/dev/null | grep -q "app-status-report.sh"; then
@@ -110,7 +111,7 @@ if crontab -l 2>/dev/null | grep -q "app-status-report.sh"; then
     fi
 
     # Remove old entry
-    crontab -l 2>/dev/null | grep -v "app-status-report.sh" | grep -v "GPS Tracker daily status report" | crontab -
+    crontab -l 2>/dev/null | grep -v "app-status-report.sh" | grep -v "Maps Tracker daily status report" | crontab -
 fi
 
 echo ""
@@ -127,7 +128,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "Schedule: $SCHEDULE_DESC"
 echo "Script: $STATUS_REPORT_SCRIPT"
 echo "Email: $EMAIL_RECIPIENT"
-echo "Logs: $SCRIPT_DIR/logs/status-report.log"
+echo "Logs: $BASE_DIR/logs/status-report.log"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
@@ -144,7 +145,7 @@ echo "Run without sending email:"
 echo "  $STATUS_REPORT_SCRIPT --no-email"
 echo ""
 echo "View status report log:"
-echo "  tail -f $SCRIPT_DIR/logs/status-report.log"
+echo "  tail -f $BASE_DIR/logs/status-report.log"
 echo ""
 echo "View all cron jobs:"
 echo "  crontab -l"

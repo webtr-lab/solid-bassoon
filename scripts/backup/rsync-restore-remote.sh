@@ -13,15 +13,31 @@
 
 set -e  # Exit on any error
 
-# Configuration
-REMOTE_USER="demo"
-REMOTE_HOST="192.168.100.74"
-REMOTE_BASE_DIR="~/gps-tracker-backup"  # Using home directory (no sudo required)
-LOCAL_BASE_DIR="/home/demo/effective-guide"
+# Automatically detect the project directory (scripts/backup -> scripts -> effective-guide)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOCAL_BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
+
+# Load .env if it exists for environment variables
+if [ -f "${LOCAL_BASE_DIR}/.env" ]; then
+    set +a
+    source "${LOCAL_BASE_DIR}/.env"
+    set -a
+fi
+
+# Remote backup configuration (from .env or defaults)
+REMOTE_USER="${REMOTE_BACKUP_USER:-demo}"
+REMOTE_HOST="${REMOTE_BACKUP_HOST:-192.168.100.74}"
+REMOTE_BASE_DIR="${REMOTE_BACKUP_DIR:-~/maps-tracker-backup}"  # Using home directory (no sudo required)
+REMOTE_SSH_PORT="${REMOTE_BACKUP_SSH_PORT:-22}"
 
 # Directories to restore
 BACKUP_DIR="${LOCAL_BASE_DIR}/backups"
 LOGS_DIR="${LOCAL_BASE_DIR}/logs"
+
+# Email notification settings (from .env or defaults)
+EMAIL_ENABLED="${BACKUP_EMAIL_ENABLED:-true}"
+EMAIL_RECIPIENT="${BACKUP_EMAIL:-admin@example.com}"
+EMAIL_SUBJECT_PREFIX="[Maps Tracker Restore]"
 
 # Colors for output (only use if outputting to a terminal)
 if [ -t 1 ]; then
@@ -68,9 +84,9 @@ check_requirements() {
 
 # Test SSH connection to remote server
 test_ssh_connection() {
-    log_info "Testing SSH connection to ${REMOTE_USER}@${REMOTE_HOST}..."
+    log_info "Testing SSH connection to ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_SSH_PORT}..."
 
-    if ssh -o BatchMode=yes -o ConnectTimeout=10 "${REMOTE_USER}@${REMOTE_HOST}" "echo 'SSH connection successful'" &> /dev/null; then
+    if ssh -o BatchMode=yes -o ConnectTimeout=10 -p "${REMOTE_SSH_PORT}" "${REMOTE_USER}@${REMOTE_HOST}" "echo 'SSH connection successful'" &> /dev/null; then
         log_info "SSH connection test passed"
         return 0
     else
@@ -84,12 +100,12 @@ list_remote_backups() {
     log_info "Listing available backups on remote server..."
     echo ""
 
-    log_info "Database Backups:"
-    ssh "${REMOTE_USER}@${REMOTE_HOST}" "ls -lh ${REMOTE_BASE_DIR}/backups/*.sql 2>/dev/null || echo 'No database backups found'"
+    log_info "Database Backups (organized by type and date):"
+    ssh -p "${REMOTE_SSH_PORT}" "${REMOTE_USER}@${REMOTE_HOST}" "find ${REMOTE_BASE_DIR}/backups -name '*.sql' -type f 2>/dev/null | sort -r || echo 'No database backups found'"
 
     echo ""
     log_info "Log Files:"
-    ssh "${REMOTE_USER}@${REMOTE_HOST}" "ls -lh ${REMOTE_BASE_DIR}/logs/*.log* 2>/dev/null || echo 'No log files found'"
+    ssh -p "${REMOTE_SSH_PORT}" "${REMOTE_USER}@${REMOTE_HOST}" "ls -lh ${REMOTE_BASE_DIR}/logs/*.log* 2>/dev/null | tail -10 || echo 'No log files found'"
 }
 
 # Restore function
@@ -101,7 +117,8 @@ restore_directory() {
     log_info "Starting restore of ${source_name} from ${remote_source}"
 
     # Check if remote directory exists
-    if ! ssh "${REMOTE_USER}@${REMOTE_HOST}" "[ -d ${REMOTE_BASE_DIR}/${source_name} ]"; then
+    # Use single quotes to allow tilde expansion on remote side
+    if ! ssh -p "${REMOTE_SSH_PORT}" "${REMOTE_USER}@${REMOTE_HOST}" '[ -d '"${REMOTE_BASE_DIR}"'/'${source_name}' ]'; then
         log_error "Remote directory does not exist: ${REMOTE_BASE_DIR}/${source_name}"
         return 1
     fi
@@ -125,7 +142,7 @@ restore_directory() {
         --no-perms \
         --stats \
         --human-readable \
-        -e "ssh -o BatchMode=yes -o ConnectTimeout=10" \
+        -e "ssh -p ${REMOTE_SSH_PORT} -o BatchMode=yes -o ConnectTimeout=10" \
         "${remote_source}" \
         "${dest_dir}/"
 

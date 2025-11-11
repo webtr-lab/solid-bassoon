@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>GPS Tracker - Mobile</title>
+    <title>Devnan Tracker - Mobile</title>
     <style>
         * {
             margin: 0;
@@ -159,7 +159,7 @@
             color: #667eea;
         }
         
-        .gps-info {
+        .location-info {
             background: #f0f9ff;
             padding: 15px;
             border-radius: 12px;
@@ -167,8 +167,8 @@
             font-size: 13px;
             color: #1e40af;
         }
-        
-        .gps-info div {
+
+        .location-info div {
             margin-bottom: 5px;
         }
         
@@ -179,7 +179,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>📍 GPS Tracker</h1>
+        <h1>📍 Devnan Tracker</h1>
         <p class="subtitle">Mobile Location Sender</p>
 
         <div id="loginCard" class="card">
@@ -253,7 +253,7 @@
                     </div>
                 </div>
                 
-                <div class="gps-info">
+                <div class="location-info">
                     <div><strong>Latitude:</strong> <span id="latitude">--</span></div>
                     <div><strong>Longitude:</strong> <span id="longitude">--</span></div>
                     <div><strong>Accuracy:</strong> <span id="accuracy">--</span>m</div>
@@ -445,15 +445,15 @@
             return distance / timeInHours;
         }
         
-        async function sendGPSData(position) {
+        async function sendLocationData(position) {
             const serverUrl = serverUrlInput.value.trim();
             const deviceId = vehicleSelect.value;
-            
+
             if (!serverUrl || !deviceId) {
                 showStatus('Please fill in all fields', 'error');
                 return;
             }
-            
+
             let speed = 0;
             if (lastPosition && lastUpdateTime) {
                 const timeDiff = Date.now() - lastUpdateTime;
@@ -465,14 +465,14 @@
                     timeDiff
                 );
             }
-            
+
             const data = {
                 device_id: deviceId,
                 latitude: position.coords.latitude,
                 longitude: position.coords.longitude,
                 speed: Math.max(0, speed)
             };
-            
+
             try {
                 const response = await fetch(`${serverUrl}/api/gps`, {
                     method: 'POST',
@@ -509,24 +509,24 @@
         
         function startTracking() {
             if (!navigator.geolocation) {
-                showStatus('GPS not supported on this device', 'error');
+                showStatus('Location services not supported on this device', 'error');
                 return;
             }
-            
+
             const serverUrl = serverUrlInput.value.trim();
             const deviceId = vehicleSelect.value;
-            
+
             if (!serverUrl) {
                 showStatus('Please enter server URL', 'error');
                 return;
             }
-            
+
             if (!deviceId) {
                 showStatus('Please select a vehicle', 'error');
                 return;
             }
-            
-            showStatus('Starting GPS tracking...', 'info');
+
+            showStatus('Starting location tracking...', 'info');
             statsContainer.classList.remove('hidden');
             
             const intervalSeconds = parseInt(updateIntervalSelect.value);
@@ -534,15 +534,15 @@
             watchId = navigator.geolocation.watchPosition(
                 (position) => {
                     if (!updateInterval) {
-                        sendGPSData(position);
-                        
+                        sendLocationData(position);
+
                         updateInterval = setInterval(() => {
-                            navigator.geolocation.getCurrentPosition(sendGPSData);
+                            navigator.geolocation.getCurrentPosition(sendLocationData);
                         }, intervalSeconds * 1000);
                     }
                 },
                 (error) => {
-                    showStatus(`GPS Error: ${error.message}`, 'error');
+                    showStatus(`Location Error: ${error.message}`, 'error');
                 },
                 {
                     enableHighAccuracy: true,
@@ -581,7 +581,7 @@
         
         async function saveCurrentLocation() {
             if (!lastPosition) {
-                showStatus('No GPS data available to save', 'error');
+                showStatus('No location data available to save', 'error');
                 return;
             }
 
@@ -664,8 +664,8 @@
 
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
-                () => console.log('GPS ready'),
-                () => console.log('GPS permission needed')
+                () => console.log('Location services ready'),
+                () => console.log('Location permission needed')
             );
         }
     </script>

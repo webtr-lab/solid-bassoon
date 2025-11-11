@@ -74,7 +74,7 @@ function Login({ onLoginSuccess }) {
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <div className="text-5xl mb-4">📍</div>
-          <h1 className="text-3xl font-bold text-gray-800">GPS Tracker</h1>
+          <h1 className="text-3xl font-bold text-gray-800">Devnan Maps Tracker</h1>
           <p className="text-gray-600 mt-2">
             {isLogin ? 'Sign in to your account' : 'Create a new account'}
           </p>

@@ -4,7 +4,7 @@ This document explains the local Nominatim cache setup for fast location search/
 
 ## Overview
 
-The GPS Tracker now includes a local Nominatim geocoding service that provides:
+The Maps Tracker now includes a local Nominatim geocoding service that provides:
 
 - **Instant search results** - No network latency to external services
 - **No rate limits** - Search as fast as you want
@@ -90,7 +90,7 @@ You should get JSON results with coordinates and place names.
 
 ### 5. Test in the Application
 
-1. Open the GPS Tracker web interface
+1. Open the Maps Tracker web interface
 2. Use the search bar at the top of the map
 3. Type any location in Suriname (e.g., "Waterkant", "Palmentuin", "Paramaribo")
 4. Results should appear instantly without delays

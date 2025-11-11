@@ -1,0 +1,60 @@
+# Version Control
+.git
+.gitignore
+.gitattributes
+
+# Environment & Config
+.env
+.env.local
+.env.*.local
+.env.example
+
+# Node/Python
+node_modules/
+__pycache__/
+*.pyc
+*.egg-info/
+venv/
+env/
+.venv/
+
+# Build artifacts
+dist/
+build/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Data directories (these are volumes)
+database/
+nominatim-data/
+logs/
+
+# Test & coverage
+coverage/
+.coverage
+*.lcov
+
+# Documentation
+docs/
+README.md
+CONTRIBUTING.md
+CLAUDE.md
+LICENSE
+
+# Scripts (kept out of images)
+scripts/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore

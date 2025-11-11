@@ -1,6 +1,6 @@
-# Contributing to GPS Tracker
+# Contributing to Maps Tracker
 
-Thank you for considering contributing to this GPS tracking application! This document provides guidelines for contributing to the project.
+Thank you for considering contributing to this Maps tracking application! This document provides guidelines for contributing to the project.
 
 ## Getting Started
 
@@ -66,7 +66,7 @@ Before submitting a PR:
    - Vehicle tracking
    - Location history
    - Places of interest
-   - Mobile GPS submission
+   - Mobile location submission
 3. Test in different browsers (Chrome, Firefox, Safari)
 4. Check responsive design on mobile devices
 5. Verify no console errors or warnings

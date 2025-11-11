@@ -1,20 +1,28 @@
 #!/bin/bash
 #
-# GPS Tracker Application Status Report
+# Maps Tracker Application Status Report
 # Performs comprehensive health checks and sends daily status report via email
 #
 # Usage: ./app-status-report.sh [--no-email]
 #
 
-# Configuration
-BASE_DIR="/home/demo/effective-guide"
+# Configuration - Automatically detect the project directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 LOG_DIR="${BASE_DIR}/logs"
 STATUS_LOG="${LOG_DIR}/status-report.log"
 
-# Email configuration
-EMAIL_ENABLED=true
-EMAIL_RECIPIENT="demo@praxisnetworking.com"
-EMAIL_SUBJECT_PREFIX="[GPS Tracker Status]"
+# Load .env if it exists for environment variables
+if [ -f "${BASE_DIR}/.env" ]; then
+    set +a
+    source "${BASE_DIR}/.env"
+    set -a
+fi
+
+# Email configuration (from .env or defaults)
+EMAIL_ENABLED="${BACKUP_EMAIL_ENABLED:-true}"
+EMAIL_RECIPIENT="${BACKUP_EMAIL:-admin@example.com}"
+EMAIL_SUBJECT_PREFIX="[Maps Tracker Status]"
 
 # Check for --no-email flag
 if [[ "$1" == "--no-email" ]]; then
@@ -296,38 +304,29 @@ send_email_notification() {
         return 0
     fi
 
-    # Check if mail command is available
-    if ! command -v mail &> /dev/null && ! command -v mailx &> /dev/null; then
-        log "Email notification skipped: mail command not available"
-        return 1
-    fi
-
-    local MAIL_CMD="mail"
-    if command -v mailx &> /dev/null; then
-        MAIL_CMD="mailx"
-    fi
+    # Email will be sent via send-email.sh or mail command
 
     # Determine subject based on status (without emojis for better email compatibility)
     local subject
     local status_emoji
     case "$OVERALL_STATUS" in
         "OPERATIONAL")
-            subject="${EMAIL_SUBJECT_PREFIX} All Systems Operational"
-            status_emoji="OK"
+            subject="${EMAIL_SUBJECT_PREFIX} [MONITORING] All Systems Operational"
+            status_emoji="✓"
             ;;
         "DEGRADED")
-            subject="${EMAIL_SUBJECT_PREFIX} System Degraded"
-            status_emoji="WARNING"
+            subject="${EMAIL_SUBJECT_PREFIX} [MONITORING] System Degraded - Action Recommended"
+            status_emoji="⚠"
             ;;
         "CRITICAL")
-            subject="${EMAIL_SUBJECT_PREFIX} Critical Issues Detected"
-            status_emoji="CRITICAL"
+            subject="${EMAIL_SUBJECT_PREFIX} [MONITORING] Critical Issues Detected - Action Required"
+            status_emoji="✗"
             ;;
     esac
 
     # Build email body (simplified formatting for better email compatibility)
     local email_body=$(cat <<EOF
-${status_emoji} GPS Tracker Application Status Report
+${status_emoji} Maps Tracker Application Status Report
 ================================================
 
 Report Time: ${REPORT_TIMESTAMP}
@@ -393,20 +392,54 @@ QUICK COMMANDS
   View app logs: tail -100 ${LOG_DIR}/app.log
 
 ================================================
-This is an automated daily report from the GPS Tracker monitoring system.
+This is an automated daily report from the Maps Tracker monitoring system.
 EOF
 )
 
     # Send email
     log "Sending status report to ${EMAIL_RECIPIENT}..."
-    echo "$email_body" | $MAIL_CMD -s "$subject" "$EMAIL_RECIPIENT" 2>&1 | tee -a "${STATUS_LOG}"
 
-    if [ ${PIPESTATUS[1]} -eq 0 ]; then
-        log "Email notification sent successfully"
-    else
-        log "Failed to send email notification"
-        return 1
+    # Try using the SMTP relay script from scripts/email directory (primary)
+    local SEND_EMAIL_SCRIPT="${BASE_DIR}/scripts/email/send-email.sh"
+    if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${STATUS_LOG}"
+        if [ ${PIPESTATUS[0]} -eq 0 ]; then
+            log "Email notification sent successfully"
+            return 0
+        else
+            log "Failed to send email notification"
+            return 1
+        fi
     fi
+
+    # Fallback to parent directory for backward compatibility
+    SEND_EMAIL_SCRIPT="$(dirname "${BASE_DIR}")/send-email.sh"
+    if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${STATUS_LOG}"
+        if [ ${PIPESTATUS[0]} -eq 0 ]; then
+            log "Email notification sent successfully"
+            return 0
+        else
+            log "Failed to send email notification"
+            return 1
+        fi
+    fi
+
+    # Fall back to mail command if available
+    if command -v mail &> /dev/null || command -v mailx &> /dev/null; then
+        local MAIL_CMD="mail"
+        if command -v mailx &> /dev/null; then
+            MAIL_CMD="mailx"
+        fi
+        echo "$email_body" | $MAIL_CMD -s "$subject" "$EMAIL_RECIPIENT" 2>&1 | tee -a "${STATUS_LOG}"
+        if [ ${PIPESTATUS[1]} -eq 0 ]; then
+            log "Email notification sent successfully"
+            return 0
+        fi
+    fi
+
+    log "Email notification skipped: no mail delivery method available"
+    return 1
 }
 
 # Main execution
@@ -449,9 +482,9 @@ main() {
   Total Locations: ${DB_LOCATIONS:-0} | Updates (24h): ${DB_RECENT:-0}
   Last Update: ${DB_LAST:-N/A}"
 
-        # Check if no recent GPS updates
+        # Check if no recent Maps updates
         if [ "${DB_RECENT:-0}" -eq 0 ]; then
-            WARNINGS+=("No GPS updates received in the last 24 hours")
+            WARNINGS+=("No Maps updates received in the last 24 hours")
             [ "$OVERALL_STATUS" = "OPERATIONAL" ] && OVERALL_STATUS="DEGRADED"
         fi
     else

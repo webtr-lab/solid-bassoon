@@ -207,7 +207,7 @@ function App() {
           <header className="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg">
             <div className="px-6 py-4 flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold">GPS Tracker</h1>
+                <h1 className="text-2xl font-bold">Devnan Maps Tracker</h1>
                 <p className="text-sm text-blue-100">Password change required</p>
               </div>
               <div className="text-right">
@@ -232,7 +232,7 @@ function App() {
       <header className="bg-blue-600 text-white p-4 shadow-lg">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold">GPS Tracker Dashboard</h1>
+            <h1 className="text-2xl font-bold">Devnan Maps Dashboard</h1>
             <p className="text-sm text-blue-100">Real-time vehicle tracking and location history</p>
           </div>
           <div className="flex items-center gap-4">
