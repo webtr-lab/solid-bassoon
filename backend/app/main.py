@@ -5,6 +5,7 @@ from flask_bcrypt import Bcrypt
 from app.config import Config
 from app.models import db, Vehicle, Location, SavedLocation, User, PlaceOfInterest
 from app.logging_config import setup_logging
+from app.security import validate_gps_coordinates, ValidationError, require_admin, require_manager_or_admin
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import math
@@ -59,8 +60,11 @@ with app.app_context():
         app.logger.info("Created 5 default vehicles")
     
     if User.query.count() == 0:
-        # Create default admin user with admin/admin123
-        default_password = 'admin123'
+        # Create default admin user with randomly generated password
+        from app.security import generate_secure_password
+
+        # Generate random password on first run
+        default_password = generate_secure_password()
         admin_password = bcrypt.generate_password_hash(default_password).decode('utf-8')
         admin_user = User(
             username='admin',
@@ -71,30 +75,26 @@ with app.app_context():
         )
         db.session.add(admin_user)
         db.session.commit()
-        app.logger.warning("="*60)
-        app.logger.warning("IMPORTANT: Default admin user created")
-        app.logger.warning(f"Username: admin")
-        app.logger.warning(f"Password: {default_password}")
-        app.logger.warning("This user will be prompted to change password on first login")
-        app.logger.warning("="*60)
+
+        # Write credentials to secure temporary file (NOT logs)
+        credentials_file = '/tmp/INITIAL_ADMIN_CREDENTIALS.txt'
+        try:
+            with open(credentials_file, 'w') as f:
+                f.write(f"Initial Admin Credentials\n")
+                f.write(f"========================\n")
+                f.write(f"Username: admin\n")
+                f.write(f"Password: {default_password}\n")
+                f.write(f"Important: Change this password on first login\n")
+            os.chmod(credentials_file, 0o600)  # Read-only by owner
+            app.logger.warning(f"Initial admin credentials written to {credentials_file}")
+            app.logger.warning("Credentials will be deleted after first password change")
+        except Exception as e:
+            app.logger.error(f"Failed to write credentials file: {e}")
+            app.logger.warning("IMPORTANT: Default admin user created but credentials could not be saved")
 
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({'status': 'healthy', 'message': 'Maps Tracker API is running'})
-
-@app.route('/api/auth/default-credentials', methods=['GET'])
-def check_default_credentials():
-    """Check if default admin credentials should be displayed"""
-    admin_user = User.query.filter_by(username='admin').first()
-
-    if admin_user and admin_user.must_change_password:
-        return jsonify({
-            'show_default': True,
-            'username': 'admin',
-            'password': 'admin123'
-        })
-
-    return jsonify({'show_default': False})
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
@@ -182,27 +182,39 @@ def change_password():
 @app.route('/api/gps', methods=['POST'])
 def receive_gps():
     data = request.json
-    
+
     required_fields = ['device_id', 'latitude', 'longitude']
     if not all(field in data for field in required_fields):
         return jsonify({'error': 'Missing required fields'}), 400
-    
+
     vehicle = Vehicle.query.filter_by(device_id=data['device_id']).first()
     if not vehicle:
         return jsonify({'error': 'Vehicle not found'}), 404
-    
-    location = Location(
-        vehicle_id=vehicle.id,
-        latitude=float(data['latitude']),
-        longitude=float(data['longitude']),
-        speed=float(data.get('speed', 0.0)),
-        timestamp=datetime.utcnow()
-    )
-    db.session.add(location)
-    detect_and_save_stops(vehicle.id, location)
-    db.session.commit()
 
-    return jsonify({'message': 'Location data received', 'vehicle': vehicle.name, 'location_id': location.id}), 201
+    try:
+        # Validate GPS coordinates are within valid ranges
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        speed = data.get('speed', 0.0)
+
+        validate_gps_coordinates(latitude, longitude, speed)
+
+        location = Location(
+            vehicle_id=vehicle.id,
+            latitude=float(latitude),
+            longitude=float(longitude),
+            speed=float(speed),
+            timestamp=datetime.utcnow()
+        )
+        db.session.add(location)
+        detect_and_save_stops(vehicle.id, location)
+        db.session.commit()
+
+        return jsonify({'message': 'Location data received', 'vehicle': vehicle.name, 'location_id': location.id}), 201
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 400
+    except (ValueError, TypeError) as e:
+        return jsonify({'error': 'Invalid coordinate values'}), 400
 
 def detect_and_save_stops(vehicle_id, current_location):
     time_window = datetime.utcnow() - timedelta(minutes=10)
@@ -429,6 +441,7 @@ def get_vehicle_stats(vehicle_id):
 
 @app.route('/api/users', methods=['GET'])
 @login_required
+@require_admin
 def get_users():
     users = User.query.all()
     return jsonify([{
@@ -442,6 +455,7 @@ def get_users():
 
 @app.route('/api/users/<int:user_id>', methods=['PUT'])
 @login_required
+@require_admin
 def update_user(user_id):
     data = request.json
     user = User.query.get(user_id)
@@ -475,6 +489,7 @@ def update_user(user_id):
 
 @app.route('/api/users/<int:user_id>', methods=['DELETE'])
 @login_required
+@require_admin
 def delete_user(user_id):
     if user_id == current_user.id:
         return jsonify({'error': 'Cannot delete your own account'}), 400
@@ -489,6 +504,7 @@ def delete_user(user_id):
 
 @app.route('/api/vehicles', methods=['POST'])
 @login_required
+@require_manager_or_admin
 def create_vehicle():
     data = request.json
     
@@ -517,6 +533,7 @@ def create_vehicle():
 
 @app.route('/api/vehicles/<int:vehicle_id>', methods=['PUT'])
 @login_required
+@require_manager_or_admin
 def update_vehicle(vehicle_id):
     data = request.json
     vehicle = Vehicle.query.get(vehicle_id)
@@ -541,6 +558,7 @@ def update_vehicle(vehicle_id):
 
 @app.route('/api/vehicles/<int:vehicle_id>', methods=['DELETE'])
 @login_required
+@require_manager_or_admin
 def delete_vehicle(vehicle_id):
     vehicle = Vehicle.query.get(vehicle_id)
     
@@ -590,6 +608,7 @@ def get_places_of_interest():
 
 @app.route('/api/places-of-interest', methods=['POST'])
 @login_required
+@require_manager_or_admin
 def create_place_of_interest():
     from app.models import PlaceOfInterest
     data = request.json
@@ -622,6 +641,7 @@ def create_place_of_interest():
 
 @app.route('/api/places-of-interest/<int:place_id>', methods=['PUT'])
 @login_required
+@require_manager_or_admin
 def update_place_of_interest(place_id):
     from app.models import PlaceOfInterest
     place = PlaceOfInterest.query.get(place_id)
@@ -761,6 +781,7 @@ def report_visits():
 
 @app.route('/api/places-of-interest/<int:place_id>', methods=['DELETE'])
 @login_required
+@require_manager_or_admin
 def delete_place_of_interest(place_id):
     from app.models import PlaceOfInterest
     place = PlaceOfInterest.query.get(place_id)

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
 function Login({ onLoginSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -7,26 +7,6 @@ function Login({ onLoginSuccess }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [defaultCredentials, setDefaultCredentials] = useState(null);
-
-  useEffect(() => {
-    // Check if default credentials should be shown
-    const fetchDefaultCredentials = async () => {
-      try {
-        const response = await fetch('/api/auth/default-credentials', {
-          credentials: 'include'
-        });
-        const data = await response.json();
-        if (data.show_default) {
-          setDefaultCredentials(data);
-        }
-      } catch (error) {
-        console.error('Error fetching default credentials:', error);
-      }
-    };
-
-    fetchDefaultCredentials();
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -156,25 +136,6 @@ function Login({ onLoginSuccess }) {
             {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>
         </div>
-
-        {isLogin && defaultCredentials && (
-          <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-sm font-semibold text-yellow-800 mb-2 text-center">
-              Default Credentials
-            </p>
-            <div className="text-sm text-gray-700 space-y-1">
-              <p className="text-center">
-                <span className="font-medium">Username:</span> {defaultCredentials.username}
-              </p>
-              <p className="text-center">
-                <span className="font-medium">Password:</span> {defaultCredentials.password}
-              </p>
-              <p className="text-xs text-yellow-700 text-center mt-2">
-                You will be prompted to change this password after login
-              </p>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
