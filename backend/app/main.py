@@ -1,11 +1,15 @@
-from flask import Flask, request, jsonify, session, send_file
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_bcrypt import Bcrypt
 from app.config import Config
 from app.models import db, Vehicle, Location, SavedLocation, User, PlaceOfInterest
 from app.logging_config import setup_logging
-from app.security import validate_gps_coordinates, ValidationError, require_admin, require_manager_or_admin, login_rate_limiter, validate_email, validate_password_strength
+from app.security import (
+    validate_gps_coordinates, ValidationError, require_admin, require_manager_or_admin,
+    login_rate_limiter, validate_email, validate_password_strength, PaginationParams,
+    log_audit_event
+)
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import math
@@ -44,8 +48,30 @@ def log_request():
     access_logger.info(f"{request.method} {request.path} - IP: {request.remote_addr}")
 
 @app.after_request
-def log_response(response):
-    """Log HTTP responses"""
+def add_security_headers(response):
+    """Add security headers to all responses"""
+    # Prevent clickjacking attacks
+    response.headers['X-Frame-Options'] = 'DENY'
+
+    # Prevent MIME type sniffing
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+
+    # Enable XSS protection in older browsers
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+
+    # Content Security Policy - restrict resources to same origin
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+
+    # Don't expose server details
+    response.headers['Server'] = 'MapsTracker'
+
+    # Referrer policy
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+
+    # Feature policy / Permissions policy
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+
+    # Log response
     access_logger.info(f"{request.method} {request.path} - Status: {response.status_code}")
     return response
 
@@ -284,42 +310,51 @@ def receive_gps():
         return jsonify({'error': 'Invalid coordinate values'}), 400
 
 def detect_and_save_stops(vehicle_id, current_location):
-    time_window = datetime.utcnow() - timedelta(minutes=10)
-    recent_locations = Location.query.filter(
-        Location.vehicle_id == vehicle_id,
-        Location.timestamp >= time_window
-    ).order_by(Location.timestamp.desc()).all()
-    
-    if len(recent_locations) < 5:
-        return
-    
-    first_loc = recent_locations[-1]
-    distance = calculate_distance(
-        first_loc.latitude, first_loc.longitude,
-        current_location.latitude, current_location.longitude
-    )
-    
-    if distance < 0.05 and len(recent_locations) >= 5:
-        time_diff = (current_location.timestamp - first_loc.timestamp).total_seconds() / 60
-        
-        if time_diff >= 5:
-            existing_stop = SavedLocation.query.filter(
-                SavedLocation.vehicle_id == vehicle_id,
-                SavedLocation.timestamp >= time_window
-            ).first()
-            
-            if not existing_stop:
-                saved_loc = SavedLocation(
-                    vehicle_id=vehicle_id,
-                    name='Auto-detected Stop',
-                    latitude=current_location.latitude,
-                    longitude=current_location.longitude,
-                    stop_duration_minutes=int(time_diff),
-                    visit_type='auto_detected',
-                    timestamp=first_loc.timestamp
-                )
-                db.session.add(saved_loc)
-                app.logger.info(f"Auto-detected stop for vehicle_id={vehicle_id}, duration={int(time_diff)}min, location=({current_location.latitude:.6f}, {current_location.longitude:.6f})")
+    """
+    Detect vehicle stops using a 5+ minute stationary period
+    Uses database transaction to prevent race condition (duplicate stops)
+    """
+    try:
+        time_window = datetime.utcnow() - timedelta(minutes=10)
+        recent_locations = Location.query.filter(
+            Location.vehicle_id == vehicle_id,
+            Location.timestamp >= time_window
+        ).order_by(Location.timestamp.desc()).all()
+
+        if len(recent_locations) < 5:
+            return
+
+        first_loc = recent_locations[-1]
+        distance = calculate_distance(
+            first_loc.latitude, first_loc.longitude,
+            current_location.latitude, current_location.longitude
+        )
+
+        if distance < 0.05 and len(recent_locations) >= 5:
+            time_diff = (current_location.timestamp - first_loc.timestamp).total_seconds() / 60
+
+            if time_diff >= 5:
+                # Use transaction to prevent race condition
+                # Check if stop already exists for this vehicle/time
+                existing_stop = SavedLocation.query.with_for_update().filter(
+                    SavedLocation.vehicle_id == vehicle_id,
+                    SavedLocation.timestamp >= time_window
+                ).first()
+
+                if not existing_stop:
+                    saved_loc = SavedLocation(
+                        vehicle_id=vehicle_id,
+                        name='Auto-detected Stop',
+                        latitude=current_location.latitude,
+                        longitude=current_location.longitude,
+                        stop_duration_minutes=int(time_diff),
+                        visit_type='auto_detected',
+                        timestamp=first_loc.timestamp
+                    )
+                    db.session.add(saved_loc)
+                    app.logger.info(f"Auto-detected stop for vehicle_id={vehicle_id}, duration={int(time_diff)}min, location=({current_location.latitude:.6f}, {current_location.longitude:.6f})")
+    except Exception as e:
+        app.logger.error(f"Error detecting stops for vehicle_id={vehicle_id}: {str(e)}")
 
 def calculate_distance(lat1, lon1, lat2, lon2):
     R = 6371
@@ -335,13 +370,30 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 @app.route('/api/vehicles', methods=['GET'])
 @login_required
 def get_vehicles():
-    vehicles = Vehicle.query.all()
-    return jsonify([{
-        'id': v.id,
-        'name': v.name,
-        'device_id': v.device_id,
-        'is_active': v.is_active
-    } for v in vehicles])
+    """List all vehicles with pagination"""
+    try:
+        # Parse pagination parameters
+        pagination = PaginationParams.from_request(request)
+
+        # Get total count before applying pagination
+        query = Vehicle.query
+        total_count = query.count()
+
+        # Apply pagination
+        vehicles = pagination.apply_to_query(query).all()
+
+        return jsonify({
+            'data': [{
+                'id': v.id,
+                'name': v.name,
+                'device_id': v.device_id,
+                'is_active': v.is_active
+            } for v in vehicles],
+            'meta': pagination.response_meta(total_count)
+        })
+    except Exception as e:
+        app.logger.error(f"Error listing vehicles: {str(e)}")
+        return jsonify({'error': 'Failed to list vehicles'}), 500
 
 @app.route('/api/vehicles/<int:vehicle_id>/location', methods=['GET'])
 @login_required
@@ -510,15 +562,43 @@ def get_vehicle_stats(vehicle_id):
 @login_required
 @require_admin
 def get_users():
-    users = User.query.all()
-    return jsonify([{
-        'id': u.id,
-        'username': u.username,
-        'email': u.email,
-        'is_active': u.is_active,
-        'role': u.role,
-        'created_at': u.created_at.isoformat()
-    } for u in users])
+    """List all users with pagination"""
+    try:
+        # Parse pagination parameters
+        pagination = PaginationParams.from_request(request)
+
+        # Get total count before applying pagination
+        query = User.query
+        total_count = query.count()
+
+        # Apply pagination
+        users = pagination.apply_to_query(query).all()
+
+        # Log audit event
+        log_audit_event(
+            user_id=current_user.id,
+            action='list',
+            resource='user',
+            status='success',
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent', ''),
+            details=f'Listed users (limit={pagination.limit}, offset={pagination.offset})'
+        )
+
+        return jsonify({
+            'data': [{
+                'id': u.id,
+                'username': u.username,
+                'email': u.email,
+                'is_active': u.is_active,
+                'role': u.role,
+                'created_at': u.created_at.isoformat()
+            } for u in users],
+            'meta': pagination.response_meta(total_count)
+        })
+    except Exception as e:
+        app.logger.error(f"Error listing users: {str(e)}")
+        return jsonify({'error': 'Failed to list users'}), 500
 
 @app.route('/api/users/<int:user_id>', methods=['PUT'])
 @login_required
@@ -639,39 +719,55 @@ def delete_vehicle(vehicle_id):
 @app.route('/api/places-of-interest', methods=['GET'])
 @login_required
 def get_places_of_interest():
+    """List all places of interest with search, filter, and pagination"""
     from app.models import PlaceOfInterest
 
-    # Get query parameters for search and filter
-    search = request.args.get('search', '').strip()
-    area_filter = request.args.get('area', '').strip()
+    try:
+        # Get query parameters for search and filter
+        search = request.args.get('search', '').strip()
+        area_filter = request.args.get('area', '').strip()
 
-    # Start with base query
-    query = PlaceOfInterest.query
+        # Parse pagination parameters
+        pagination = PaginationParams.from_request(request)
 
-    # Apply search filter (search by name)
-    if search:
-        query = query.filter(PlaceOfInterest.name.ilike(f'%{search}%'))
+        # Start with base query
+        query = PlaceOfInterest.query
 
-    # Apply area filter
-    if area_filter:
-        query = query.filter(PlaceOfInterest.area.ilike(f'%{area_filter}%'))
+        # Apply search filter (search by name)
+        if search:
+            query = query.filter(PlaceOfInterest.name.ilike(f'%{search}%'))
 
-    places = query.order_by(PlaceOfInterest.created_at.desc()).all()
+        # Apply area filter
+        if area_filter:
+            query = query.filter(PlaceOfInterest.area.ilike(f'%{area_filter}%'))
 
-    return jsonify([{
-        'id': p.id,
-        'name': p.name,
-        'address': p.address,
-        'area': p.area,
-        'contact': p.contact,
-        'telephone': p.telephone,
-        'latitude': p.latitude,
-        'longitude': p.longitude,
-        'category': p.category,
-        'description': p.description,
-        'created_at': p.created_at.isoformat(),
-        'created_by': p.creator.username if p.creator else None
-    } for p in places])
+        # Get total count before applying pagination
+        total_count = query.count()
+
+        # Apply ordering and pagination
+        places = query.order_by(PlaceOfInterest.created_at.desc())
+        places = pagination.apply_to_query(places).all()
+
+        return jsonify({
+            'data': [{
+                'id': p.id,
+                'name': p.name,
+                'address': p.address,
+                'area': p.area,
+                'contact': p.contact,
+                'telephone': p.telephone,
+                'latitude': p.latitude,
+                'longitude': p.longitude,
+                'category': p.category,
+                'description': p.description,
+                'created_at': p.created_at.isoformat(),
+                'created_by': p.creator.username if p.creator else None
+            } for p in places],
+            'meta': pagination.response_meta(total_count)
+        })
+    except Exception as e:
+        app.logger.error(f"Error listing places of interest: {str(e)}")
+        return jsonify({'error': 'Failed to list places of interest'}), 500
 
 @app.route('/api/places-of-interest', methods=['POST'])
 @login_required
@@ -1405,4 +1501,6 @@ scheduler.add_job(func=automatic_backup, trigger="cron", hour=2, minute=0)
 scheduler.start()
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    # Never use debug=True in production - exposes sensitive information
+    debug_mode = app.config.get('FLASK_ENV') == 'development'
+    app.run(debug=debug_mode, host='0.0.0.0')

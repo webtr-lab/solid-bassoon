@@ -303,30 +303,84 @@ def sanitize_log_entry(entry):
     return sanitized
 
 # ============================================================================
+# PAGINATION UTILITIES
+# ============================================================================
+
+class PaginationParams:
+    """Helper class for pagination parameters"""
+    def __init__(self, limit=20, offset=0, max_limit=100):
+        self.limit = min(int(limit), max_limit)  # Cap at max_limit
+        self.offset = max(0, int(offset))  # No negative offsets
+        self.max_limit = max_limit
+
+    @staticmethod
+    def from_request(request, max_limit=100):
+        """Parse pagination params from Flask request"""
+        try:
+            limit = int(request.args.get('limit', 20))
+            offset = int(request.args.get('offset', 0))
+            return PaginationParams(limit, offset, max_limit)
+        except (ValueError, TypeError):
+            return PaginationParams(20, 0, max_limit)
+
+    def apply_to_query(self, query):
+        """Apply pagination to a SQLAlchemy query"""
+        return query.limit(self.limit).offset(self.offset)
+
+    def response_meta(self, total_count):
+        """Generate metadata dict for paginated response"""
+        return {
+            'limit': self.limit,
+            'offset': self.offset,
+            'total': total_count,
+            'returned': min(self.limit, max(0, total_count - self.offset))
+        }
+
+# ============================================================================
 # AUDIT LOGGING
 # ============================================================================
 
-def log_security_event(user_id, action, resource, status, details=None):
+def log_audit_event(user_id, action, resource, status, resource_id=None, ip_address=None, user_agent=None, details=None):
     """
-    Log security-relevant events for audit trail
-    
+    Log security-relevant events to audit_log table for compliance and forensics
+
     Should be used for:
     - User creation/modification/deletion
     - Password changes
     - Permission changes
     - Backup operations
     - API access to sensitive endpoints
+
+    Args:
+        user_id: ID of user performing action (or None for unauthenticated actions)
+        action: Action performed (e.g., 'login', 'user_create', 'password_change')
+        resource: Resource affected (e.g., 'user', 'vehicle', 'backup')
+        status: Result status ('success' or 'failure')
+        resource_id: ID of affected resource (optional)
+        ip_address: Client IP address (optional)
+        user_agent: Client User-Agent (optional)
+        details: Additional context (optional)
     """
-    timestamp = datetime.utcnow().isoformat()
-    event = {
-        'timestamp': timestamp,
-        'user_id': user_id,
-        'action': action,
-        'resource': resource,
-        'status': status,
-        'details': sanitize_log_entry(details) if details else None
-    }
-    # This should be written to database audit_log table
-    # For now, just return for application to log
-    return event
+    # Import here to avoid circular dependency
+    from app.models import AuditLog, db
+
+    try:
+        audit_entry = AuditLog(
+            user_id=user_id,
+            action=action,
+            resource=resource,
+            resource_id=resource_id,
+            status=status,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            details=sanitize_log_entry(details) if details else None
+        )
+        db.session.add(audit_entry)
+        db.session.commit()
+        return audit_entry
+    except Exception as e:
+        # Don't let audit failures break the application
+        import logging
+        logging.error(f"Failed to log audit event: {str(e)}")
+        return None
 

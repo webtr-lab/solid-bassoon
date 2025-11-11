@@ -68,3 +68,27 @@ class PlaceOfInterest(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     creator = db.relationship('User', backref=db.backref('created_places', lazy=True))
+
+class AuditLog(db.Model):
+    """
+    Immutable audit trail for security-relevant events
+    Used for compliance, forensics, and security monitoring
+    """
+    __tablename__ = 'audit_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    action = db.Column(db.String(100), nullable=False, index=True)  # login, logout, user_create, user_delete, password_change, etc.
+    resource = db.Column(db.String(100), nullable=False, index=True)  # user, vehicle, place, backup, etc.
+    resource_id = db.Column(db.Integer)  # ID of the affected resource
+    status = db.Column(db.String(20), nullable=False)  # success, failure
+    ip_address = db.Column(db.String(45))  # IPv4 or IPv6
+    user_agent = db.Column(db.String(500))
+    details = db.Column(db.Text)  # Additional context
+
+    # Relationship to user
+    user = db.relationship('User', backref=db.backref('audit_logs', lazy=True))
+
+    def __repr__(self):
+        return f'<AuditLog {self.action} on {self.resource}#{self.resource_id} by user#{self.user_id} at {self.timestamp}>'
