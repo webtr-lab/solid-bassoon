@@ -13,7 +13,9 @@
 
 set -e
 
-BASE_DIR="/home/devnan/effective-guide"
+# Automatically detect the project directory (scripts/setup -> scripts -> project-root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 BACKUP_SCRIPT="${BASE_DIR}/scripts/backup/backup-manager.sh"
 VERIFY_SCRIPT="${BASE_DIR}/scripts/backup/run-backup-verify.sh"
 CRON_LOG="${BASE_DIR}/logs/cron.log"

@@ -4,7 +4,9 @@
 # Regenerates missing metadata for all backups
 #
 
-BASE_DIR="/home/devnan/effective-guide"
+# Automatically detect the project directory (scripts/backup -> scripts -> project-root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 BACKUP_ROOT="${BASE_DIR}/backups"
 INDEX_FILE="${BACKUP_ROOT}/index/backup_index.json"
 

@@ -4,7 +4,9 @@
 # Finds latest backup and verifies it using pg_restore
 #
 
-BASE_DIR="/home/devnan/effective-guide"
+# Automatically detect the project directory (scripts/backup -> scripts -> project-root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 BACKUP_DIR="${BASE_DIR}/backups"
 VERIFY_LOG="${BASE_DIR}/logs/backup-verification.log"
 EMAIL="${BACKUP_EMAIL:-admin@example.com}"

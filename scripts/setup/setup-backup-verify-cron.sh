@@ -7,7 +7,9 @@
 
 set -e
 
-BASE_DIR="/home/devnan/effective-guide"
+# Automatically detect the project directory (scripts/setup -> scripts -> project-root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 VERIFY_SCRIPT="${BASE_DIR}/scripts/backup/verify-backup.sh"
 LOG_DIR="${BASE_DIR}/logs"
 VERIFY_LOG="${LOG_DIR}/backup-verification.log"
@@ -49,7 +51,9 @@ cat > "${BASE_DIR}/scripts/backup/run-backup-verify.sh" << 'WRAPPER_SCRIPT'
 # Logs all verification output and sends email alerts on failure
 #
 
-BASE_DIR="/home/devnan/effective-guide"
+# Automatically detect the project directory (scripts/backup -> scripts -> project-root)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
 VERIFY_SCRIPT="${BASE_DIR}/scripts/backup/verify-backup.sh"
 VERIFY_LOG="${BASE_DIR}/logs/backup-verification.log"
 EMAIL="${BACKUP_EMAIL:-admin@example.com}"
