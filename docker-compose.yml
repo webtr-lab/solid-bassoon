@@ -1,6 +1,8 @@
 services:
   db:
-    image: postgres:15-alpine
+    build:
+      context: ./backend
+      dockerfile: postgres.Dockerfile
     container_name: maps_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -9,6 +11,7 @@ services:
     volumes:
       - ./database:/var/lib/postgresql/data
       - ./backups:/backups
+      - ./backups/wal-archive:/var/lib/postgresql/wal-archive
     networks:
       - maps-network
     restart: unless-stopped

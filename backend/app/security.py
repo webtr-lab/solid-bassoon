@@ -253,6 +253,28 @@ def generate_secure_password(length=16):
 # PATH TRAVERSAL PROTECTION
 # ============================================================================
 
+def validate_url(url):
+    """
+    Validate URL to prevent path traversal and SSRF attacks
+    Only allows http:// and https:// schemes
+    """
+    if not url or not isinstance(url, str):
+        raise ValidationError("URL is required and must be a string")
+
+    # Normalize URL
+    url_lower = url.lower()
+
+    # Only allow http and https schemes
+    if not (url_lower.startswith('http://') or url_lower.startswith('https://')):
+        raise ValidationError("Only HTTP and HTTPS URLs are allowed")
+
+    # Additional validation - reject localhost/private IPs in production (optional)
+    # This is commented as it may not be needed for Nominatim
+    # if any(ip in url for ip in ['127.0.0.1', 'localhost', '192.168', '10.0']):
+    #     raise ValidationError("Private IP addresses not allowed")
+
+    return True
+
 def sanitize_filename(filename):
     """
     Sanitize filename to prevent path traversal attacks

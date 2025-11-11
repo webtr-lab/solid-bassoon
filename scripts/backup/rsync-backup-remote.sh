@@ -307,19 +307,28 @@ backup_directory() {
 
     log_info "Backing up ${file_count} files (${dir_size})"
 
-    # Rsync options:
+    # Rsync options (optimized for incremental backups):
     #   -a: archive mode (preserves permissions, timestamps, etc.)
     #   -v: verbose
     #   -z: compress during transfer
+    #   --compress-level=6: balance compression/speed for incremental transfers
     #   --delete: delete files on remote that don't exist locally (mirror)
+    #   --delete-delay: don't delete until end of transfer (prevents interruptions)
     #   --stats: show transfer statistics
     #   --human-readable: human-readable numbers
+    #   --partial-dir: keep partial transfers in .rsync-partial for resumption
+    #   --hard-links: preserve hard links (efficient for WAL chains)
+    #   --ignore-errors: continue on errors (important for large syncs)
     #   -e ssh: use ssh for transfer
 
-    rsync -avz \
-        --delete \
+    rsync -av --compress --compress-level=6 \
+        --delete --delete-delay \
+        --partial-dir=.rsync-partial \
+        --hard-links \
+        --ignore-errors \
         --stats \
         --human-readable \
+        --timeout=60 \
         -e "ssh -p ${REMOTE_SSH_PORT} -o BatchMode=yes -o ConnectTimeout=10" \
         "${source_dir}/" \
         "${remote_dest}" 2>&1 | tee -a "${SCRIPT_LOG}"

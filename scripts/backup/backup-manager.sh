@@ -123,16 +123,29 @@ create_metadata() {
     local metadata_file="${backup_file}.metadata.json"
 
     local file_size=$(stat -c%s "${backup_file}" 2>/dev/null || stat -f%z "${backup_file}")
-    local checksum=$(md5sum "${backup_file}" | awk '{print $1}')
+    local checksum=$(sha256sum "${backup_file}" | awk '{print $1}')
     local timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
-    # Get table count
-    local table_count=$(docker compose exec -T db pg_restore --list "/backups/$(basename ${backup_file})" 2>/dev/null | grep -c "TABLE DATA" 2>/dev/null || echo "0")
+    # Get table count - construct the path as it appears in Docker container
+    local table_count="0"
+    # Convert the full path to the relative path as seen in Docker /backups mount
+    local docker_backup_path="/backups/$(echo "${backup_file}" | sed "s|${BACKUP_ROOT}/||")"
+
+    if command -v pg_restore &> /dev/null; then
+        # Try local pg_restore if available
+        table_count=$(pg_restore --list "${backup_file}" 2>/dev/null | grep -c "TABLE DATA" 2>/dev/null || echo "0")
+    else
+        # Use Docker pg_restore with correct path
+        table_count=$(docker compose exec -T db pg_restore --list "${docker_backup_path}" 2>/dev/null | grep -c "TABLE DATA" 2>/dev/null || echo "0")
+    fi
     # Clean up table_count to ensure it's a valid number
     table_count=$(echo "$table_count" | tr -d '\n\r ' | grep -E '^[0-9]+$' || echo "0")
 
-    # Get postgres version and clean it for JSON
-    local pg_version=$(docker compose exec -T db psql -U ${DB_USER} -t -c 'SELECT version();' 2>/dev/null | head -1 | tr -d '\n\r' | xargs 2>/dev/null || echo 'unknown')
+    # Get postgres version - use direct query with better error handling
+    local pg_version="unknown"
+    if docker compose exec -T db psql -U ${DB_USER} -d ${DB_NAME} -t -c "SELECT version();" 2>/dev/null | head -1 | grep -q "PostgreSQL"; then
+        pg_version=$(docker compose exec -T db psql -U ${DB_USER} -d ${DB_NAME} -t -c "SELECT version();" 2>/dev/null | head -1 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    fi
 
     # Use Python to create valid JSON - pass values as environment variables to avoid shell substitution issues
     BACKUP_FILE="$(basename ${backup_file})" \
@@ -140,7 +153,7 @@ create_metadata() {
     CREATED_AT="${timestamp}" \
     FILE_SIZE="${file_size}" \
     FILE_SIZE_HUMAN="$(numfmt --to=iec-i --suffix=B ${file_size} 2>/dev/null || echo "${file_size} bytes")" \
-    CHECKSUM_MD5="${checksum}" \
+    CHECKSUM_SHA256="${checksum}" \
     TABLE_COUNT="${table_count}" \
     DATABASE="${DB_NAME}" \
     POSTGRES_VERSION="${pg_version}" \
@@ -155,7 +168,7 @@ metadata = {
     "created_at": os.environ.get('CREATED_AT', ''),
     "file_size": int(os.environ.get('FILE_SIZE', '0')),
     "file_size_human": os.environ.get('FILE_SIZE_HUMAN', ''),
-    "checksum_md5": os.environ.get('CHECKSUM_MD5', ''),
+    "checksum_sha256": os.environ.get('CHECKSUM_SHA256', ''),
     "table_count": int(os.environ.get('TABLE_COUNT', '0')),
     "database": os.environ.get('DATABASE', ''),
     "postgres_version": os.environ.get('POSTGRES_VERSION', 'unknown'),
@@ -280,7 +293,7 @@ create_full_backup() {
         -U "${DB_USER}" \
         -d "${DB_NAME}" \
         -F c \
-        -Z 6 \
+        -Z 9 \
         -f "/backups/${backup_filename}" 2>&1 | tee -a "${BACKUP_LOG}"
 
     if [ ${PIPESTATUS[0]} -ne 0 ]; then
@@ -301,14 +314,26 @@ create_full_backup() {
     if [ -f "${BACKUP_ROOT}/${backup_filename}" ]; then
         mv "${BACKUP_ROOT}/${backup_filename}" "${backup_path}"
         log_info "Backup moved to: ${backup_path}"
+
+        # Fix file ownership to current user (handles Docker volume ownership issues)
+        # This ensures backup files are owned by the user running the script, not root
+        # Use Docker container to chown since it has root privileges
+        # Construct relative path from BACKUP_ROOT for Docker mount point
+        rel_backup_path="${backup_path#${BACKUP_ROOT}/}"
+        docker_chown_path="/backups/${rel_backup_path}"
+        if docker compose exec -T db chown 1000:1000 "${docker_chown_path}" 2>/dev/null; then
+            log_info "✓ Fixed backup file ownership to devnan:devnan"
+        else
+            log_warn "Could not change backup file ownership via Docker (volume permissions issue)"
+        fi
     else
         log_error "Backup file not found: ${BACKUP_ROOT}/${backup_filename}"
         return 1
     fi
 
-    # Create checksum
-    log_info "Generating checksum..."
-    md5sum "${backup_path}" | awk '{print $1}' > "${backup_path}.md5"
+    # Create checksum (SHA256 - stronger than MD5)
+    log_info "Generating SHA256 checksum..."
+    sha256sum "${backup_path}" > "${backup_path}.sha256"
 
     # Create metadata (with verified=true since we verified above)
     create_metadata "${backup_path}" "full"
@@ -366,7 +391,7 @@ create_daily_backup() {
         -U "${DB_USER}" \
         -d "${DB_NAME}" \
         -F c \
-        -Z 6 \
+        -Z 9 \
         -f "/backups/${backup_filename}" 2>&1 | tee -a "${BACKUP_LOG}"
 
     if [ ${PIPESTATUS[0]} -ne 0 ]; then
@@ -387,14 +412,26 @@ create_daily_backup() {
     if [ -f "${BACKUP_ROOT}/${backup_filename}" ]; then
         mv "${BACKUP_ROOT}/${backup_filename}" "${backup_path}"
         log_info "Backup moved to: ${backup_path}"
+
+        # Fix file ownership to current user (handles Docker volume ownership issues)
+        # This ensures backup files are owned by the user running the script, not root
+        # Use Docker container to chown since it has root privileges
+        # Construct relative path from BACKUP_ROOT for Docker mount point
+        rel_backup_path="${backup_path#${BACKUP_ROOT}/}"
+        docker_chown_path="/backups/${rel_backup_path}"
+        if docker compose exec -T db chown 1000:1000 "${docker_chown_path}" 2>/dev/null; then
+            log_info "✓ Fixed backup file ownership to devnan:devnan"
+        else
+            log_warn "Could not change backup file ownership via Docker (volume permissions issue)"
+        fi
     else
         log_error "Backup file not found: ${BACKUP_ROOT}/${backup_filename}"
         return 1
     fi
 
-    # Create checksum
-    log_info "Generating checksum..."
-    md5sum "${backup_path}" | awk '{print $1}' > "${backup_path}.md5"
+    # Create checksum (SHA256 - stronger than MD5)
+    log_info "Generating SHA256 checksum..."
+    sha256sum "${backup_path}" > "${backup_path}.sha256"
 
     # Create metadata (with verified=true since we verified above)
     create_metadata "${backup_path}" "daily"
@@ -461,7 +498,7 @@ cleanup_old_backups() {
 
         if [ "$file_date" -lt "$cutoff_date" ]; then
             log_info "Removing old backup: ${backup_file}"
-            rm -f "${backup_file}" "${backup_file}.md5" "${backup_file}.metadata.json" "${backup_file}.gz"
+            rm -f "${backup_file}" "${backup_file}.sha256" "${backup_file}.metadata.json" "${backup_file}.gz"
             ((cleanup_count++))
         fi
     done
@@ -473,7 +510,7 @@ cleanup_old_backups() {
 
         if [ "$file_date" -lt "$cutoff_date" ]; then
             log_info "Removing old backup: ${backup_file}"
-            rm -f "${backup_file}" "${backup_file}.md5" "${backup_file}.metadata.json" "${backup_file}.gz"
+            rm -f "${backup_file}" "${backup_file}.sha256" "${backup_file}.metadata.json" "${backup_file}.gz"
             ((cleanup_count++))
         fi
     done

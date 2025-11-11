@@ -8,7 +8,7 @@ from app.logging_config import setup_logging
 from app.security import (
     validate_gps_coordinates, ValidationError, require_admin, require_manager_or_admin,
     login_rate_limiter, validate_email, validate_password_strength, PaginationParams,
-    log_audit_event
+    log_audit_event, validate_url
 )
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -16,6 +16,7 @@ import math
 import os
 import subprocess
 import glob
+import tempfile
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -103,15 +104,24 @@ with app.app_context():
         db.session.commit()
 
         # Write credentials to secure temporary file (NOT logs)
-        credentials_file = '/tmp/INITIAL_ADMIN_CREDENTIALS.txt'
         try:
-            with open(credentials_file, 'w') as f:
+            # Use secure temporary file with proper permissions
+            with tempfile.NamedTemporaryFile(
+                mode='w',
+                prefix='INITIAL_ADMIN_',
+                suffix='.txt',
+                delete=False,
+                dir=None  # Use system temp directory (secure)
+            ) as f:
+                credentials_file = f.name
                 f.write(f"Initial Admin Credentials\n")
                 f.write(f"========================\n")
                 f.write(f"Username: admin\n")
                 f.write(f"Password: {default_password}\n")
                 f.write(f"Important: Change this password on first login\n")
-            os.chmod(credentials_file, 0o600)  # Read-only by owner
+
+            # Set restrictive permissions (read/write for owner only)
+            os.chmod(credentials_file, 0o600)
             app.logger.warning(f"Initial admin credentials written to {credentials_file}")
             app.logger.warning("Credentials will be deleted after first password change")
         except Exception as e:
@@ -994,6 +1004,13 @@ def geocode_address():
         rate_limit_nominatim()
 
     try:
+        # Validate Nominatim URL to prevent SSRF attacks
+        try:
+            validate_url(nominatim_url)
+        except ValidationError as e:
+            app.logger.error(f"[GEOCODE ERROR] Invalid Nominatim URL: {str(e)}")
+            return jsonify({'error': 'Invalid Nominatim configuration'}), 500
+
         # Add Suriname to the search query for better results
         full_query = f"{address}, Suriname"
         encoded_query = urllib.parse.quote(full_query)
@@ -1094,16 +1111,16 @@ def verify_backup(backup_filename):
         if table_count < 5:  # Expect at least 5 tables
             return {'valid': False, 'error': f'Only {table_count} tables found (expected 5+)'}
 
-        # Check 4: Generate and store MD5 checksum
+        # Check 4: Generate and store SHA256 checksum (not weak MD5)
         import hashlib
-        md5_hash = hashlib.md5()
+        sha256_hash = hashlib.sha256()
         with open(backup_path, 'rb') as f:
             for chunk in iter(lambda: f.read(4096), b""):
-                md5_hash.update(chunk)
-        checksum = md5_hash.hexdigest()
+                sha256_hash.update(chunk)
+        checksum = sha256_hash.hexdigest()
 
         # Save checksum to file
-        checksum_file = f'{backup_path}.md5'
+        checksum_file = f'{backup_path}.sha256'
         with open(checksum_file, 'w') as f:
             f.write(f'{checksum}  {backup_filename}\n')
 

@@ -1,0 +1,389 @@
+#!/bin/bash
+#
+# Archive Old Backups Script
+# Compresses backups older than 30 days using gzip
+# Updates metadata and backup index with compression information
+#
+# Features:
+#   - Finds backups older than ARCHIVE_AFTER_DAYS
+#   - Compresses with gzip -9 (maximum compression)
+#   - Updates metadata.json with compression flag
+#   - Updates backup index with new compressed file info
+#   - Sends email reports on completion
+#   - Tracks compression statistics
+#
+
+set -e
+
+# Configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$(dirname "${SCRIPT_DIR}")")"
+BACKUP_ROOT="${BASE_DIR}/backups"
+LOG_DIR="${BASE_DIR}/logs"
+ARCHIVE_LOG="${LOG_DIR}/archive-backups.log"
+INDEX_FILE="${BACKUP_ROOT}/index/backup_index.json"
+
+# Backup directories
+FULL_BACKUP_DIR="${BACKUP_ROOT}/full"
+DAILY_BACKUP_DIR="${BACKUP_ROOT}/daily"
+
+# Archive settings
+ARCHIVE_AFTER_DAYS=30  # Compress backups older than 30 days
+
+# Load .env if it exists for environment variables
+if [ -f "${BASE_DIR}/.env" ]; then
+    set +a
+    source "${BASE_DIR}/.env"
+    set -a
+fi
+
+# Email settings
+EMAIL_ENABLED="${BACKUP_EMAIL_ENABLED:-true}"
+EMAIL_RECIPIENT="${BACKUP_EMAIL:-admin@example.com}"
+EMAIL_SUBJECT_PREFIX="[Maps Tracker Backup Archive]"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Logging functions
+log() {
+    local level=$1
+    shift
+    local message="$@"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[${timestamp}] [${level}] ${message}" | tee -a "${ARCHIVE_LOG}"
+}
+
+log_info() {
+    log "INFO" "$@"
+    echo -e "${GREEN}[INFO]${NC} $@"
+}
+
+log_warn() {
+    log "WARN" "$@"
+    echo -e "${YELLOW}[WARN]${NC} $@"
+}
+
+log_error() {
+    log "ERROR" "$@"
+    echo -e "${RED}[ERROR]${NC} $@" >&2
+}
+
+# Send email notification
+send_archive_notification() {
+    local status=$1
+    local details=$2
+
+    if [ "$EMAIL_ENABLED" != "true" ]; then
+        return 0
+    fi
+
+    local subject="${EMAIL_SUBJECT_PREFIX} Backup Archive Report - ${status^^}"
+
+    local email_body="════════════════════════════════════════════════════════════════
+BACKUP COMPRESSION REPORT - Maps Tracker
+════════════════════════════════════════════════════════════════
+
+Application:     Maps Tracker (Vehicle Tracking System)
+Company:         [YOUR COMPANY NAME]
+Server:          $(hostname)
+Environment:     Production
+Report Type:     Automated Backup Compression
+Status:          ${status}
+Timestamp:       $(date '+%Y-%m-%d %H:%M:%S')
+
+WHAT HAPPENED:
+──────────────────────────────────────────────────────────────────
+The automated backup compression process ran successfully.
+Backups older than 30 days were compressed with gzip.
+
+BUSINESS BENEFIT:
+──────────────────────────────────────────────────────────────────
+✓ Reduces backup storage requirements
+✓ Saves disk space and infrastructure costs
+✓ Maintains full recovery capability
+✓ Automated process - no manual intervention needed
+
+COMPRESSION DETAILS:
+──────────────────────────────────────────────────────────────────
+${details}
+
+STORAGE OPTIMIZATION:
+──────────────────────────────────────────────────────────────────
+• Compressed backups are still fully restorable
+• Old compressed backups deleted after 180 days (retention policy)
+• Compression runs automatically at 3:00 AM daily
+
+NEXT STEPS:
+──────────────────────────────────────────────────────────────────
+No action required. This is a routine maintenance task.
+Check logs if compression rate seems unusually low.
+
+SUPPORT CONTACT:
+──────────────────────────────────────────────────────────────────
+For questions or issues, contact: System Administrator
+Log Location: /home/devnan/effective-guide/logs/archive-backups.log
+
+════════════════════════════════════════════════════════════════
+This is an automated notification from Maps Tracker backup system.
+Generated by: Backup Compression Process"
+
+    # Try using the SMTP relay script
+    local SEND_EMAIL_SCRIPT="${BASE_DIR}/scripts/email/send-email.sh"
+    if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1
+        return $?
+    fi
+
+    # Fallback to mail command if available
+    if command -v mail &> /dev/null || command -v mailx &> /dev/null; then
+        local MAIL_CMD="mail"
+        if command -v mailx &> /dev/null; then
+            MAIL_CMD="mailx"
+        fi
+        echo "$email_body" | $MAIL_CMD -s "$subject" "$EMAIL_RECIPIENT" 2>&1
+        return $?
+    fi
+
+    return 1
+}
+
+# Update metadata file with compression info
+update_backup_metadata() {
+    local backup_path=$1
+    local metadata_file="${backup_path}.metadata.json"
+
+    if [ ! -f "${metadata_file}" ]; then
+        log_warn "Metadata file not found: ${metadata_file}"
+        return 1
+    fi
+
+    # Use Python to safely update JSON metadata
+    python3 << 'PYEOF'
+import json
+import os
+import sys
+
+backup_path = sys.argv[1]
+metadata_file = f"{backup_path}.metadata.json"
+
+try:
+    with open(metadata_file, 'r') as f:
+        metadata = json.load(f)
+
+    # Update compression flags
+    metadata['compressed'] = True
+    metadata['compressed_at'] = None  # Will be set after compression
+
+    # Update backup_file reference to include .gz extension if not already
+    original_backup_file = metadata.get('backup_file', '')
+    if not original_backup_file.endswith('.gz'):
+        metadata['backup_file'] = original_backup_file + '.gz'
+
+    with open(metadata_file, 'w') as f:
+        json.dump(metadata, f, indent=2)
+
+    sys.exit(0)
+except Exception as e:
+    print(f"Error updating metadata: {e}", file=sys.stderr)
+    sys.exit(1)
+PYEOF
+
+    return $?
+}
+
+# Update backup index with new file information
+update_backup_index() {
+    local backup_path=$1
+    local file_size=$(stat -c%s "${backup_path}" 2>/dev/null || stat -f%z "${backup_path}")
+    local file_size_human=$(du -h "${backup_path}" | cut -f1)
+
+    python3 << 'PYEOF'
+import json
+import os
+import sys
+
+backup_path = sys.argv[1]
+index_file = sys.argv[2]
+
+try:
+    with open(index_file, 'r') as f:
+        index = json.load(f)
+
+    backup_filename = os.path.basename(backup_path)
+
+    # Find and update the backup entry in the index
+    for backup in index['backups']:
+        if backup.get('backup_file', '').replace('.gz', '') == backup_filename.replace('.gz', ''):
+            backup['compressed'] = True
+            backup['compressed_at'] = None  # Would be timestamp if needed
+            break
+
+    # Update last_updated timestamp
+    from datetime import datetime
+    index['last_updated'] = datetime.utcnow().isoformat() + 'Z'
+
+    with open(index_file, 'w') as f:
+        json.dump(index, f, indent=2)
+
+    sys.exit(0)
+except Exception as e:
+    print(f"Error updating backup index: {e}", file=sys.stderr)
+    sys.exit(1)
+PYEOF
+
+    return $?
+}
+
+# Archive (compress) old backup files
+archive_backups() {
+    log_info "=========================================="
+    log_info "Archiving backups older than ${ARCHIVE_AFTER_DAYS} days..."
+    log_info "=========================================="
+
+    local archive_cutoff=$(date -d "${ARCHIVE_AFTER_DAYS} days ago" +%s 2>/dev/null || date -v-${ARCHIVE_AFTER_DAYS}d +%s)
+    local full_count=0
+    local daily_count=0
+    local total_size_before=0
+    local total_size_after=0
+
+    # Archive FULL backups
+    log_info "Processing FULL backups..."
+
+    find "${FULL_BACKUP_DIR}" -name "backup_full_*.sql" -type f 2>/dev/null | while read backup_file; do
+        local file_date=$(stat -c %Y "${backup_file}" 2>/dev/null || stat -f %m "${backup_file}")
+        local backup_filename=$(basename "${backup_file}")
+
+        # Skip if already compressed
+        if [ -f "${backup_file}.gz" ]; then
+            log_info "  ⊘ Already compressed: ${backup_filename}"
+            continue
+        fi
+
+        # Check if backup is older than cutoff
+        if [ "$file_date" -lt "$archive_cutoff" ]; then
+            local size_before=$(stat -c%s "${backup_file}" 2>/dev/null || stat -f%z "${backup_file}")
+            local size_before_human=$(du -h "${backup_file}" | cut -f1)
+
+            log_info "  ⧖ Compressing: ${backup_filename} (${size_before_human})"
+
+            # Compress backup file
+            if gzip -9 "${backup_file}"; then
+                local size_after=$(stat -c%s "${backup_file}.gz" 2>/dev/null || stat -f%z "${backup_file}.gz")
+                local size_after_human=$(du -h "${backup_file}.gz" | cut -f1)
+                local reduction=$((100 - (size_after * 100 / size_before)))
+
+                log_info "  ✓ Compressed: ${backup_filename}.gz (${size_after_human}, ${reduction}% smaller)"
+
+                # Update metadata
+                if update_backup_metadata "${backup_file}"; then
+                    log_info "  ✓ Metadata updated"
+                else
+                    log_warn "  ⚠ Failed to update metadata"
+                fi
+
+                ((full_count++))
+                total_size_before=$((total_size_before + size_before))
+                total_size_after=$((total_size_after + size_after))
+            else
+                log_error "  ✗ Compression failed: ${backup_filename}"
+            fi
+        fi
+    done
+
+    # Archive DAILY backups
+    log_info "Processing DAILY backups..."
+
+    find "${DAILY_BACKUP_DIR}" -name "backup_daily_*.sql" -type f 2>/dev/null | while read backup_file; do
+        local file_date=$(stat -c %Y "${backup_file}" 2>/dev/null || stat -f %m "${backup_file}")
+        local backup_filename=$(basename "${backup_file}")
+
+        # Skip if already compressed
+        if [ -f "${backup_file}.gz" ]; then
+            log_info "  ⊘ Already compressed: ${backup_filename}"
+            continue
+        fi
+
+        # Check if backup is older than cutoff
+        if [ "$file_date" -lt "$archive_cutoff" ]; then
+            local size_before=$(stat -c%s "${backup_file}" 2>/dev/null || stat -f%z "${backup_file}")
+            local size_before_human=$(du -h "${backup_file}" | cut -f1)
+
+            log_info "  ⧖ Compressing: ${backup_filename} (${size_before_human})"
+
+            # Compress backup file
+            if gzip -9 "${backup_file}"; then
+                local size_after=$(stat -c%s "${backup_file}.gz" 2>/dev/null || stat -f%z "${backup_file}.gz")
+                local size_after_human=$(du -h "${backup_file}.gz" | cut -f1)
+                local reduction=$((100 - (size_after * 100 / size_before)))
+
+                log_info "  ✓ Compressed: ${backup_filename}.gz (${size_after_human}, ${reduction}% smaller)"
+
+                # Update metadata
+                if update_backup_metadata "${backup_file}"; then
+                    log_info "  ✓ Metadata updated"
+                else
+                    log_warn "  ⚠ Failed to update metadata"
+                fi
+
+                ((daily_count++))
+                total_size_before=$((total_size_before + size_before))
+                total_size_after=$((total_size_after + size_after))
+            else
+                log_error "  ✗ Compression failed: ${backup_filename}"
+            fi
+        fi
+    done
+
+    log_info "=========================================="
+    log_info "Archive Summary"
+    log_info "=========================================="
+    log_info "Full backups compressed: ${full_count}"
+    log_info "Daily backups compressed: ${daily_count}"
+
+    if [ $((full_count + daily_count)) -gt 0 ]; then
+        local total_compressed=$((full_count + daily_count))
+        local space_saved=$((total_size_before - total_size_after))
+        local space_saved_human=$(numfmt --to=iec-i --suffix=B "${space_saved}" 2>/dev/null || echo "${space_saved} bytes")
+
+        log_info "Total backups compressed: ${total_compressed}"
+        log_info "Storage space saved: ${space_saved_human}"
+
+        # Update backup index
+        if update_backup_index "" "${INDEX_FILE}"; then
+            log_info "Backup index updated"
+        fi
+
+        # Send success notification
+        local email_details="Compression completed successfully.
+
+Backups Compressed:
+  - Full backups: ${full_count}
+  - Daily backups: ${daily_count}
+  - Total: ${total_compressed}
+
+Storage Saved: ${space_saved_human}
+
+Archive Threshold: ${ARCHIVE_AFTER_DAYS} days ago"
+
+        send_archive_notification "SUCCESS" "${email_details}"
+    else
+        log_info "No backups needed archiving"
+        send_archive_notification "NO ACTION NEEDED" "No backups older than ${ARCHIVE_AFTER_DAYS} days found to archive."
+    fi
+}
+
+# Initialize log directory
+mkdir -p "${LOG_DIR}"
+
+# Run archive
+log_info "Archive job started"
+archive_backups
+exit_code=$?
+
+log_info "Archive job completed (exit code: ${exit_code})"
+exit $exit_code
