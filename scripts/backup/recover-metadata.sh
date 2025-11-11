@@ -20,7 +20,8 @@ import json
 import os
 import subprocess
 
-BACKUP_ROOT = "/home/devnan/effective-guide/backups"
+# Get paths from environment (set by bash script)
+BACKUP_ROOT = os.environ.get('BACKUP_ROOT', os.path.expanduser("~/backups"))
 INDEX_FILE = os.path.join(BACKUP_ROOT, "index/backup_index.json")
 
 print("Loading backup index...")
@@ -48,8 +49,12 @@ for i, backup in enumerate(index['backups'], 1):
     # Recover table count if missing or zero
     if table_count is None or table_count == 0:
         try:
+            # Get BASE_DIR from environment or use fallback
+            base_dir = os.environ.get('BASE_DIR', os.path.dirname(BACKUP_ROOT))
+            compose_file = os.path.join(base_dir, 'docker-compose.yml')
+
             result = subprocess.run(
-                ['docker', 'compose', '-f', '/home/devnan/effective-guide/docker-compose.yml',
+                ['docker', 'compose', '-f', compose_file,
                  'exec', '-T', 'db', 'pg_restore', '--list', f'/backups/{relative_path}'],
                 capture_output=True,
                 text=True,

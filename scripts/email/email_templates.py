@@ -16,6 +16,20 @@ def get_server_info():
     return hostname, timestamp
 
 
+def get_app_paths():
+    """Get application paths dynamically"""
+    # Get the base directory (scripts/email -> scripts -> project-root)
+    script_dir = os.path.dirname(os.path.abspath(__file__))  # scripts/email
+    base_dir = os.path.dirname(os.path.dirname(script_dir))  # project-root
+
+    return {
+        'base_dir': base_dir,
+        'backups': os.path.join(base_dir, 'backups'),
+        'logs': os.path.join(base_dir, 'logs'),
+        'scripts_backup': os.path.join(base_dir, 'scripts/backup')
+    }
+
+
 def format_backup_success(backup_type, backup_file, backup_size, duration=None):
     """Format a successful backup notification email"""
     hostname, timestamp = get_server_info()
@@ -88,7 +102,7 @@ SUPPORT INFORMATION:
 ──────────────────────────────────────────────────────────────────
 For questions or issues:
   Contact: System Administrator / DevOps Team
-  Log Location: /home/devnan/effective-guide/logs/backup-manager.log
+  Log Location: {logs}/backup-manager.log
   Status: {timestamp}
 
 ════════════════════════════════════════════════════════════════
@@ -149,18 +163,18 @@ IMMEDIATE ACTION REQUIRED (Follow in order):
    Result should show: maps_db  (status: Up)
 
 3. Verify disk space is available:
-   df -h /home/devnan/effective-guide/backups
+   df -h {backups}
    Required: At least 500MB free
 
 4. Check backup directory exists and is writable:
-   ls -lad /home/devnan/effective-guide/backups
+   ls -lad {backups}
    Result: Should be drwxrwxr-x
 
 5. Review detailed error logs:
-   tail -100 /home/devnan/effective-guide/logs/backup-manager.log | grep ERROR
+   tail -100 {logs}/backup-manager.log | grep ERROR
 
 6. Manually attempt backup immediately:
-   /home/devnan/effective-guide/scripts/backup/backup-manager.sh --daily
+   {scripts_backup}/backup-manager.sh --daily
 
 7. If manual backup succeeds: Problem is likely cron-related
    Check cron configuration: crontab -l | grep backup
@@ -190,13 +204,13 @@ TROUBLESHOOTING CHECKLIST:
   df -h | grep /backups
 
 ✓ Are backup files recent?
-  ls -lt /home/devnan/effective-guide/backups/*/*/*.sql | head -5
+  ls -lt {backups}/*/*/*.sql | head -5
 
 ✓ Are there recent errors in logs?
-  tail -50 /home/devnan/effective-guide/logs/backup-manager.log
+  tail -50 {logs}/backup-manager.log
 
 ✓ Is the backup script executable?
-  ls -la /home/devnan/effective-guide/scripts/backup/backup-manager.sh
+  ls -la {scripts_backup}/backup-manager.sh
 
 ✓ Does cron have proper environment?
   env | grep POSTGRES
@@ -213,7 +227,7 @@ SUPPORT CONTACT:
 ──────────────────────────────────────────────────────────────────
 Contact: System Administrator / DevOps Team
 Priority: CRITICAL - Do not wait
-Log Location: /home/devnan/effective-guide/logs/backup-manager.log
+Log Location: {logs}/backup-manager.log
 Time To Resolve: ASAP (ideally within 2 hours)
 
 ════════════════════════════════════════════════════════════════
@@ -310,8 +324,8 @@ If you need to restore to a different point in time:
   Recovery Point: Previous backup available if needed
 
 Log Locations:
-  - Restore Log: /home/devnan/effective-guide/logs/restore-backup.log
-  - Backup Log: /home/devnan/effective-guide/logs/backup-manager.log
+  - Restore Log: {logs}/restore-backup.log
+  - Backup Log: {logs}/backup-manager.log
 
 ════════════════════════════════════════════════════════════════
 Restoration completed successfully. Maps Tracker is operational.
@@ -372,8 +386,8 @@ IMMEDIATE ACTION REQUIRED (Follow in order):
    Should return: "accepting connections"
 
 3. Review detailed error logs:
-   tail -100 /home/devnan/effective-guide/logs/restore-backup.log | grep ERROR
-   tail -50 /home/devnan/effective-guide/logs/error.log
+   tail -100 {logs}/restore-backup.log | grep ERROR
+   tail -50 {logs}/error.log
 
 4. Verify backup file is accessible and valid:
    ls -lh {os.path.basename(restore_file) if restore_file else '[backup_location]'}
@@ -426,7 +440,7 @@ TROUBLESHOOTING CHECKLIST:
 RECOVERY OPTIONS:
 ──────────────────────────────────────────────────────────────────
 1. Try using a different (older) backup:
-   ls -lt /home/devnan/effective-guide/backups/*/*/*.sql
+   ls -lt {backups}/*/*/*.sql
    ./scripts/backup/restore-backup.sh --file [older_backup]
 
 2. Increase available resources and retry:
@@ -444,8 +458,8 @@ SUPPORT CONTACT:
 Contact: Database Administrator / DevOps Team
 Priority: HIGH - Resolve within 1-2 hours
 Log Locations:
-  - Restore Log: /home/devnan/effective-guide/logs/restore-backup.log
-  - Error Log: /home/devnan/effective-guide/logs/error.log
+  - Restore Log: {logs}/restore-backup.log
+  - Error Log: {logs}/error.log
   - Database Log: docker compose logs db
 
 ════════════════════════════════════════════════════════════════

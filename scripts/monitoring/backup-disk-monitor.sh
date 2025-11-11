@@ -113,16 +113,16 @@ IMMEDIATE ACTION REQUIRED (in order of priority):
 1. Log into server $(hostname)
 
 2. Check disk space immediately:
-   df -h /home/devnan/effective-guide/backups
+   df -h ${BACKUP_ROOT}
 
 3. Review backup files:
-   du -sh /home/devnan/effective-guide/backups/*
+   du -sh ${BACKUP_ROOT}/*
 
 4. Manually compress older backups NOW:
-   /home/devnan/effective-guide/scripts/backup/archive-old-backups.sh
+   ${BASE_DIR}/scripts/backup/archive-old-backups.sh
 
 5. Delete backups older than 180 days:
-   find /home/devnan/effective-guide/backups -type f -name 'backup_*.sql' -mtime +180 -delete
+   find ${BACKUP_ROOT} -type f -name 'backup_*.sql' -mtime +180 -delete
 
 6. Verify space was freed:
    df -h
