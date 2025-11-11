@@ -36,14 +36,17 @@ EMAIL_SUBJECT_PREFIX="[Maps Tracker]"  # Subject line prefix
 
 ### SMTP Configuration
 
-Configure in `.env` file or `/scripts/email/send-email.sh`:
+Configure in `.env` file:
 
 ```bash
-SMTP_HOST=box.praxisnetworking.com
+SMTP_HOST=smtp.example.com
 SMTP_PORT=465
-SMTP_USER=your-email@example.com
-SMTP_PASS=your-password
+SMTP_USER=notifications@example.com
+SMTP_PASS=your-secure-password
+SMTP_DELAY=15  # Prevent rate limiting (seconds between emails)
 ```
+
+The `send-email.sh` script will automatically load these from `.env`.
 
 ---
 

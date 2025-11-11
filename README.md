@@ -460,7 +460,7 @@ For disaster recovery, the application supports automated remote backups via rsy
 **Quick Start:**
 ```bash
 # Test SSH connection to remote server
-ssh demo@192.168.100.74
+ssh REMOTE_BACKUP_USER@REMOTE_BACKUP_HOST
 
 # Run manual backup to remote server
 ./scripts/backup/rsync-backup-remote.sh
@@ -476,13 +476,13 @@ ssh demo@192.168.100.74
 ```
 
 **Features:**
-- Syncs both database backups and logs to remote server (192.168.100.74)
+- Syncs both database backups and logs to remote server (configured in .env)
 - Incremental transfers (only changed files)
 - Configurable schedule (every 6h, 12h, daily, custom)
 - Easy disaster recovery
 - Progress reporting and detailed logging
 
-See [docs/REMOTE_BACKUP.md](docs/REMOTE_BACKUP.md) for complete documentation.
+See [docs/REMOTE_BACKUP_CONFIGURATION.md](docs/REMOTE_BACKUP_CONFIGURATION.md) for complete documentation.
 
 ### Permissions Note
 
