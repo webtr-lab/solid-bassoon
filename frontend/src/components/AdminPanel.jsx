@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import logger from '../utils/logger';
 
 function AdminPanel({ currentUserRole }) {
   const [activeTab, setActiveTab] = useState('users');
@@ -94,7 +95,7 @@ function UserManagement() {
       const data = await response.json();
       setUsers(data.data);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      logger.error('Error fetching users', error);
     }
   };
 
@@ -145,7 +146,9 @@ function UserManagement() {
   };
 
   const handleDeleteUser = async (userId) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) return;
+    if (!window.confirm('Are you sure you want to delete this user?')) {
+return;
+}
     
     try {
       const response = await fetch(`/api/users/${userId}`, {
@@ -446,7 +449,7 @@ function VehicleManagement() {
       const data = await response.json();
       setVehicles(data.data);
     } catch (error) {
-      console.error('Error fetching vehicles:', error);
+      logger.error('Error fetching vehicles', error);
     }
   };
 
@@ -514,7 +517,9 @@ function VehicleManagement() {
   };
 
   const handleDeleteVehicle = async (vehicleId) => {
-    if (!window.confirm('Are you sure? This will delete all tracking data for this vehicle!')) return;
+    if (!window.confirm('Are you sure? This will delete all tracking data for this vehicle!')) {
+return;
+}
     
     try {
       const response = await fetch(`/api/vehicles/${vehicleId}`, {
@@ -534,8 +539,12 @@ function VehicleManagement() {
   };
 
   const filteredVehicles = vehicles.filter(v => {
-    if (filterStatus === 'active') return v.is_active;
-    if (filterStatus === 'inactive') return !v.is_active;
+    if (filterStatus === 'active') {
+return v.is_active;
+}
+    if (filterStatus === 'inactive') {
+return !v.is_active;
+}
     return true;
   });
 
@@ -740,7 +749,7 @@ function POIManagement() {
 
   const fetchPlaces = async () => {
     try {
-      let url = '/api/places-of-interest?';
+      const url = '/api/places-of-interest?';
       const params = new URLSearchParams();
 
       if (searchQuery) {
@@ -754,7 +763,7 @@ function POIManagement() {
       const data = await response.json();
       setPlaces(data.data);
     } catch (error) {
-      console.error('Error fetching places:', error);
+      logger.error('Error fetching places', error);
     }
   };
 
@@ -772,7 +781,7 @@ function POIManagement() {
       const data = await response.json();
       setSearchResults(data);
     } catch (error) {
-      console.error('Error searching address:', error);
+      logger.error('Error searching address', error);
       setSearchResults([]);
     } finally {
       setSearching(false);
@@ -837,7 +846,9 @@ function POIManagement() {
   };
 
   const handleDeletePlace = async (placeId) => {
-    if (!window.confirm('Are you sure you want to delete this place?')) return;
+    if (!window.confirm('Are you sure you want to delete this place?')) {
+return;
+}
     
     try {
       const response = await fetch(`/api/places-of-interest/${placeId}`, {
@@ -1163,9 +1174,15 @@ function ReportsManagement() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (start) params.set('start', start);
-      if (end) params.set('end', end);
-      if (areaFilter) params.set('area', areaFilter);
+      if (start) {
+params.set('start', start);
+}
+      if (end) {
+params.set('end', end);
+}
+      if (areaFilter) {
+params.set('area', areaFilter);
+}
       const url = `/api/reports/visits?${params.toString()}`;
       const resp = await fetch(url, { credentials: 'include' });
       if (!resp.ok) {
@@ -1177,7 +1194,7 @@ function ReportsManagement() {
       const data = await resp.json();
       setResults(data.results || []);
     } catch (err) {
-      console.error('Error fetching reports', err);
+      logger.error('Error fetching reports', err);
       alert('Error fetching reports');
     } finally {
       setLoading(false);
@@ -1277,7 +1294,7 @@ function ReportsManagement() {
                 type="text"
                 value={areaFilter}
                 onChange={(e) => setAreaFilter(e.target.value)}
-                placeholder="Enter area/district..."
+                placeholder="Enter area/district&hellip;"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
@@ -1293,7 +1310,7 @@ function ReportsManagement() {
           </div>
           {areaFilter && (
             <div className="mt-3 text-sm text-gray-600">
-              Filtering by area: "{areaFilter}"
+              Filtering by area: &quot;{areaFilter}&quot;
               <button
                 onClick={() => setAreaFilter('')}
                 className="ml-2 text-blue-600 hover:text-blue-800"

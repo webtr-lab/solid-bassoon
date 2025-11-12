@@ -79,6 +79,85 @@ def add_security_headers(response):
     access_logger.info(f"{request.method} {request.path} - Status: {response.status_code}")
     return response
 
+# Global error handlers
+@app.errorhandler(400)
+def bad_request(error):
+    """Handle 400 Bad Request errors"""
+    app.logger.warning(f"Bad request: {request.path} - {str(error)}")
+    return jsonify({
+        'error': 'Bad Request',
+        'message': 'The request was invalid or malformed'
+    }), 400
+
+@app.errorhandler(401)
+def unauthorized(error):
+    """Handle 401 Unauthorized errors"""
+    return jsonify({
+        'error': 'Unauthorized',
+        'message': 'Authentication required'
+    }), 401
+
+@app.errorhandler(403)
+def forbidden(error):
+    """Handle 403 Forbidden errors"""
+    return jsonify({
+        'error': 'Forbidden',
+        'message': 'You do not have permission to access this resource'
+    }), 403
+
+@app.errorhandler(404)
+def not_found(error):
+    """Handle 404 Not Found errors"""
+    app.logger.info(f"Resource not found: {request.path}")
+    return jsonify({
+        'error': 'Not Found',
+        'message': f'The requested resource does not exist'
+    }), 404
+
+@app.errorhandler(405)
+def method_not_allowed(error):
+    """Handle 405 Method Not Allowed errors"""
+    app.logger.warning(f"Method not allowed: {request.method} {request.path}")
+    return jsonify({
+        'error': 'Method Not Allowed',
+        'message': f'The {request.method} method is not allowed on this resource'
+    }), 405
+
+@app.errorhandler(409)
+def conflict(error):
+    """Handle 409 Conflict errors"""
+    return jsonify({
+        'error': 'Conflict',
+        'message': 'The request conflicts with the current state of the server'
+    }), 409
+
+@app.errorhandler(429)
+def rate_limit_exceeded(error):
+    """Handle 429 Too Many Requests errors"""
+    app.logger.warning(f"Rate limit exceeded: {request.remote_addr} - {request.path}")
+    return jsonify({
+        'error': 'Too Many Requests',
+        'message': 'You have exceeded the rate limit. Please try again later'
+    }), 429
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Handle 500 Internal Server errors"""
+    app.logger.error(f"Internal server error: {str(error)}", exc_info=True)
+    return jsonify({
+        'error': 'Internal Server Error',
+        'message': 'An unexpected error occurred on the server'
+    }), 500
+
+@app.errorhandler(503)
+def service_unavailable(error):
+    """Handle 503 Service Unavailable errors"""
+    app.logger.error(f"Service unavailable: {str(error)}")
+    return jsonify({
+        'error': 'Service Unavailable',
+        'message': 'The service is temporarily unavailable'
+    }), 503
+
 with app.app_context():
     db.create_all()
     
@@ -106,7 +185,17 @@ with app.app_context():
         db.session.add(admin_user)
         db.session.commit()
 
-        # Write credentials to secure temporary file (NOT logs)
+        # Log credentials to application logs
+        app.logger.warning("=" * 80)
+        app.logger.warning("INITIAL ADMIN CREDENTIALS GENERATED")
+        app.logger.warning("=" * 80)
+        app.logger.warning(f"Username: admin")
+        app.logger.warning(f"Password: {default_password}")
+        app.logger.warning("=" * 80)
+        app.logger.warning("IMPORTANT: Change this password on first login")
+        app.logger.warning("=" * 80)
+
+        # Write credentials to secure temporary file as backup
         try:
             # Use secure temporary file with proper permissions
             with tempfile.NamedTemporaryFile(
@@ -125,11 +214,9 @@ with app.app_context():
 
             # Set restrictive permissions (read/write for owner only)
             os.chmod(credentials_file, 0o600)
-            app.logger.warning(f"Initial admin credentials written to {credentials_file}")
-            app.logger.warning("Credentials will be deleted after first password change")
+            app.logger.warning(f"Credentials also saved to temporary file: {credentials_file}")
         except Exception as e:
             app.logger.error(f"Failed to write credentials file: {e}")
-            app.logger.warning("IMPORTANT: Default admin user created but credentials could not be saved")
 
 @app.route('/api/health', methods=['GET'])
 def health():
@@ -259,6 +346,15 @@ def change_password():
         # Verify current password
         if not bcrypt.check_password_hash(current_user.password_hash, data['current_password']):
             app.logger.warning(f"Failed password change attempt for user: {current_user.username}")
+            log_audit_event(
+                user_id=current_user.id,
+                action='change_password',
+                resource='user',
+                status='failed',
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent', ''),
+                details='Invalid current password'
+            )
             return jsonify({'error': 'Current password is incorrect'}), 401
 
         # Validate new password strength
@@ -277,11 +373,23 @@ def change_password():
         db.session.commit()
 
         app.logger.info(f"Password changed successfully for user: {current_user.username}")
+
+        log_audit_event(
+            user_id=current_user.id,
+            action='change_password',
+            resource='user',
+            status='success',
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent', ''),
+            details='Password changed'
+        )
+
         return jsonify({'message': 'Password changed successfully'})
 
     except ValidationError as e:
         return jsonify({'error': str(e)}), 400
     except Exception as e:
+        db.session.rollback()
         app.logger.error(f"Password change error: {str(e)}")
         return jsonify({'error': 'Password change failed'}), 500
 
@@ -460,20 +568,46 @@ def get_saved_locations(vehicle_id):
 @app.route('/api/vehicles/<int:vehicle_id>/saved-locations', methods=['POST'])
 @login_required
 def save_location(vehicle_id):
-    data = request.json
-    
-    saved_loc = SavedLocation(
-        vehicle_id=vehicle_id,
-        name=data.get('name', 'Saved Location'),
-        latitude=float(data['latitude']),
-        longitude=float(data['longitude']),
-        visit_type='manual',
-        notes=data.get('notes', '')
-    )
-    db.session.add(saved_loc)
-    db.session.commit()
-    
-    return jsonify({'message': 'Location saved', 'id': saved_loc.id}), 201
+    try:
+        data = request.json
+
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+
+        # Validate required fields
+        if 'latitude' not in data or 'longitude' not in data:
+            return jsonify({'error': 'Latitude and longitude are required'}), 400
+
+        try:
+            latitude = float(data['latitude'])
+            longitude = float(data['longitude'])
+            validate_gps_coordinates(latitude, longitude)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid latitude/longitude values'}), 400
+        except ValidationError as e:
+            return jsonify({'error': str(e)}), 400
+
+        # Verify vehicle exists
+        vehicle = Vehicle.query.get(vehicle_id)
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+
+        saved_loc = SavedLocation(
+            vehicle_id=vehicle_id,
+            name=data.get('name', 'Saved Location'),
+            latitude=latitude,
+            longitude=longitude,
+            visit_type='manual',
+            notes=data.get('notes', '')
+        )
+        db.session.add(saved_loc)
+        db.session.commit()
+
+        return jsonify({'message': 'Location saved', 'id': saved_loc.id}), 201
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error saving location: {str(e)}")
+        return jsonify({'error': 'Failed to save location'}), 500
 
 @app.route('/api/vehicles/<int:vehicle_id>/saved-locations/<int:location_id>', methods=['PUT'])
 @login_required
@@ -651,83 +785,146 @@ def update_user(user_id):
 @login_required
 @require_admin
 def delete_user(user_id):
-    if user_id == current_user.id:
-        return jsonify({'error': 'Cannot delete your own account'}), 400
-    
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
-    
-    db.session.delete(user)
-    db.session.commit()
-    return jsonify({'message': 'User deleted successfully'})
+    try:
+        if user_id == current_user.id:
+            return jsonify({'error': 'Cannot delete your own account'}), 400
+
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
+
+        username = user.username
+        db.session.delete(user)
+        db.session.commit()
+
+        app.logger.info(f"User deleted: {username} by user {current_user.username}")
+
+        log_audit_event(
+            user_id=current_user.id,
+            action='delete',
+            resource='user',
+            resource_id=user_id,
+            status='success',
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent', ''),
+            details=f'Deleted user: {username}'
+        )
+
+        return jsonify({'message': 'User deleted successfully'})
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting user: {str(e)}")
+        return jsonify({'error': 'Failed to delete user'}), 500
 
 @app.route('/api/vehicles', methods=['POST'])
 @login_required
 @require_manager_or_admin
 def create_vehicle():
-    data = request.json
-    
-    existing = Vehicle.query.filter_by(device_id=data['device_id']).first()
-    if existing:
-        return jsonify({'error': 'Device ID already exists'}), 400
-    
-    vehicle = Vehicle(
-        name=data['name'],
-        device_id=data['device_id'],
-        is_active=data.get('is_active', True)
-    )
-    
-    db.session.add(vehicle)
-    db.session.commit()
-    
-    return jsonify({
-        'message': 'Vehicle created successfully',
-        'vehicle': {
-            'id': vehicle.id,
-            'name': vehicle.name,
-            'device_id': vehicle.device_id,
-            'is_active': vehicle.is_active
-        }
-    }), 201
+    try:
+        data = request.json
+
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+
+        # Validate required fields
+        if not data.get('name') or not data.get('device_id'):
+            return jsonify({'error': 'Vehicle name and device ID are required'}), 400
+
+        existing = Vehicle.query.filter_by(device_id=data['device_id']).first()
+        if existing:
+            return jsonify({'error': 'Device ID already exists'}), 400
+
+        vehicle = Vehicle(
+            name=data['name'].strip(),
+            device_id=data['device_id'].strip(),
+            is_active=data.get('is_active', True)
+        )
+
+        db.session.add(vehicle)
+        db.session.commit()
+
+        app.logger.info(f"Vehicle created: {vehicle.name} (device_id={vehicle.device_id}) by user {current_user.username}")
+
+        return jsonify({
+            'message': 'Vehicle created successfully',
+            'vehicle': {
+                'id': vehicle.id,
+                'name': vehicle.name,
+                'device_id': vehicle.device_id,
+                'is_active': vehicle.is_active
+            }
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error creating vehicle: {str(e)}")
+        return jsonify({'error': 'Failed to create vehicle'}), 500
 
 @app.route('/api/vehicles/<int:vehicle_id>', methods=['PUT'])
 @login_required
 @require_manager_or_admin
 def update_vehicle(vehicle_id):
-    data = request.json
-    vehicle = Vehicle.query.get(vehicle_id)
-    
-    if not vehicle:
-        return jsonify({'error': 'Vehicle not found'}), 404
-    
-    if 'name' in data:
-        vehicle.name = data['name']
-    
-    if 'device_id' in data:
-        existing = Vehicle.query.filter_by(device_id=data['device_id']).first()
-        if existing and existing.id != vehicle_id:
-            return jsonify({'error': 'Device ID already exists'}), 400
-        vehicle.device_id = data['device_id']
-    
-    if 'is_active' in data:
-        vehicle.is_active = data['is_active']
-    
-    db.session.commit()
-    return jsonify({'message': 'Vehicle updated successfully'})
+    try:
+        data = request.json
+        vehicle = Vehicle.query.get(vehicle_id)
+
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+
+        if 'name' in data and data['name']:
+            vehicle.name = data['name'].strip()
+
+        if 'device_id' in data and data['device_id']:
+            existing = Vehicle.query.filter_by(device_id=data['device_id']).first()
+            if existing and existing.id != vehicle_id:
+                return jsonify({'error': 'Device ID already exists'}), 400
+            vehicle.device_id = data['device_id'].strip()
+
+        if 'is_active' in data:
+            vehicle.is_active = bool(data['is_active'])
+
+        db.session.commit()
+        app.logger.info(f"Vehicle updated: {vehicle.name} by user {current_user.username}")
+        return jsonify({'message': 'Vehicle updated successfully'})
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating vehicle: {str(e)}")
+        return jsonify({'error': 'Failed to update vehicle'}), 500
 
 @app.route('/api/vehicles/<int:vehicle_id>', methods=['DELETE'])
 @login_required
 @require_manager_or_admin
 def delete_vehicle(vehicle_id):
-    vehicle = Vehicle.query.get(vehicle_id)
-    
-    if not vehicle:
-        return jsonify({'error': 'Vehicle not found'}), 404
-    
-    db.session.delete(vehicle)
-    db.session.commit()
-    return jsonify({'message': 'Vehicle deleted successfully'})
+    try:
+        vehicle = Vehicle.query.get(vehicle_id)
+
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+
+        vehicle_name = vehicle.name
+        db.session.delete(vehicle)
+        db.session.commit()
+
+        app.logger.info(f"Vehicle deleted: {vehicle_name} by user {current_user.username}")
+
+        log_audit_event(
+            user_id=current_user.id,
+            action='delete',
+            resource='vehicle',
+            resource_id=vehicle_id,
+            status='success',
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent', ''),
+            details=f'Deleted vehicle: {vehicle_name}'
+        )
+
+        return jsonify({'message': 'Vehicle deleted successfully'})
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting vehicle: {str(e)}")
+        return jsonify({'error': 'Failed to delete vehicle'}), 500
 
 @app.route('/api/places-of-interest', methods=['GET'])
 @login_required
@@ -787,67 +984,111 @@ def get_places_of_interest():
 @require_manager_or_admin
 def create_place_of_interest():
     from app.models import PlaceOfInterest
-    data = request.json
-    
-    place = PlaceOfInterest(
-        name=data['name'],
-        address=data.get('address', ''),
-        area=data.get('area', ''),
-        contact=data.get('contact', ''),
-        telephone=data.get('telephone', ''),
-        latitude=float(data['latitude']),
-        longitude=float(data['longitude']),
-        category=data.get('category', 'General'),
-        description=data.get('description', ''),
-        created_by=current_user.id
-    )
-    
-    db.session.add(place)
-    db.session.commit()
-    
-    return jsonify({
-        'message': 'Place of interest created successfully',
-        'place': {
-            'id': place.id,
-            'name': place.name,
-            'latitude': place.latitude,
-            'longitude': place.longitude
-        }
-    }), 201
+    try:
+        data = request.json
+
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+
+        # Validate required fields
+        if not data.get('name'):
+            return jsonify({'error': 'Place name is required'}), 400
+
+        if 'latitude' not in data or 'longitude' not in data:
+            return jsonify({'error': 'Latitude and longitude are required'}), 400
+
+        try:
+            latitude = float(data['latitude'])
+            longitude = float(data['longitude'])
+            validate_gps_coordinates(latitude, longitude)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid latitude/longitude values'}), 400
+        except ValidationError as e:
+            return jsonify({'error': str(e)}), 400
+
+        place = PlaceOfInterest(
+            name=data['name'].strip(),
+            address=data.get('address', '').strip(),
+            area=data.get('area', '').strip(),
+            contact=data.get('contact', '').strip(),
+            telephone=data.get('telephone', '').strip(),
+            latitude=latitude,
+            longitude=longitude,
+            category=data.get('category', 'General').strip(),
+            description=data.get('description', '').strip(),
+            created_by=current_user.id
+        )
+
+        db.session.add(place)
+        db.session.commit()
+
+        app.logger.info(f"Place of interest created: {place.name} by user {current_user.username}")
+
+        return jsonify({
+            'message': 'Place of interest created successfully',
+            'place': {
+                'id': place.id,
+                'name': place.name,
+                'latitude': place.latitude,
+                'longitude': place.longitude
+            }
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error creating place of interest: {str(e)}")
+        return jsonify({'error': 'Failed to create place of interest'}), 500
 
 @app.route('/api/places-of-interest/<int:place_id>', methods=['PUT'])
 @login_required
 @require_manager_or_admin
 def update_place_of_interest(place_id):
     from app.models import PlaceOfInterest
-    place = PlaceOfInterest.query.get(place_id)
-    
-    if not place:
-        return jsonify({'error': 'Place not found'}), 404
-    
-    data = request.json
-    
-    if 'name' in data:
-        place.name = data['name']
-    if 'address' in data:
-        place.address = data['address']
-    if 'area' in data:
-        place.area = data['area']
-    if 'contact' in data:
-        place.contact = data['contact']
-    if 'telephone' in data:
-        place.telephone = data['telephone']
-    if 'latitude' in data:
-        place.latitude = float(data['latitude'])
-    if 'longitude' in data:
-        place.longitude = float(data['longitude'])
-    if 'category' in data:
-        place.category = data['category']
-    if 'description' in data:
-        place.description = data['description']
-    
-    db.session.commit()
-    return jsonify({'message': 'Place updated successfully'})
+    try:
+        place = PlaceOfInterest.query.get(place_id)
+
+        if not place:
+            return jsonify({'error': 'Place not found'}), 404
+
+        data = request.json
+
+        if not data:
+            return jsonify({'error': 'Request body is required'}), 400
+
+        # Validate coordinates if provided
+        if 'latitude' in data or 'longitude' in data:
+            try:
+                lat = float(data.get('latitude', place.latitude))
+                lon = float(data.get('longitude', place.longitude))
+                validate_gps_coordinates(lat, lon)
+                place.latitude = lat
+                place.longitude = lon
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Invalid latitude/longitude values'}), 400
+            except ValidationError as e:
+                return jsonify({'error': str(e)}), 400
+
+        if 'name' in data and data['name']:
+            place.name = data['name'].strip()
+        if 'address' in data:
+            place.address = data['address'].strip() if data['address'] else ''
+        if 'area' in data:
+            place.area = data['area'].strip() if data['area'] else ''
+        if 'contact' in data:
+            place.contact = data['contact'].strip() if data['contact'] else ''
+        if 'telephone' in data:
+            place.telephone = data['telephone'].strip() if data['telephone'] else ''
+        if 'category' in data:
+            place.category = data['category'].strip() if data['category'] else 'General'
+        if 'description' in data:
+            place.description = data['description'].strip() if data['description'] else ''
+
+        db.session.commit()
+        app.logger.info(f"Place of interest updated: {place.name} by user {current_user.username}")
+        return jsonify({'message': 'Place updated successfully'})
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error updating place of interest: {str(e)}")
+        return jsonify({'error': 'Failed to update place of interest'}), 500
 
 
 @app.route('/api/reports/visits', methods=['GET'])
@@ -960,14 +1201,34 @@ def report_visits():
 @require_manager_or_admin
 def delete_place_of_interest(place_id):
     from app.models import PlaceOfInterest
-    place = PlaceOfInterest.query.get(place_id)
-    
-    if not place:
-        return jsonify({'error': 'Place not found'}), 404
-    
-    db.session.delete(place)
-    db.session.commit()
-    return jsonify({'message': 'Place deleted successfully'})
+    try:
+        place = PlaceOfInterest.query.get(place_id)
+
+        if not place:
+            return jsonify({'error': 'Place not found'}), 404
+
+        place_name = place.name
+        db.session.delete(place)
+        db.session.commit()
+
+        app.logger.info(f"Place of interest deleted: {place_name} by user {current_user.username}")
+
+        log_audit_event(
+            user_id=current_user.id,
+            action='delete',
+            resource='place_of_interest',
+            resource_id=place_id,
+            status='success',
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent', ''),
+            details=f'Deleted place: {place_name}'
+        )
+
+        return jsonify({'message': 'Place deleted successfully'})
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error deleting place of interest: {str(e)}")
+        return jsonify({'error': 'Failed to delete place of interest'}), 500
 
 import time
 from functools import wraps
@@ -1228,8 +1489,8 @@ def restore_backup(backup_filename):
             try:
                 db.session.remove()
                 db.engine.dispose()
-            except:
-                pass
+            except Exception as e:
+                app.logger.warning(f"Warning while disposing database connections: {str(e)}")
 
         app.logger.info(f"Starting restore from {backup_filename}...")
 
@@ -1365,8 +1626,8 @@ def list_backups():
                     import json
                     with open(metadata_file, 'r') as f:
                         metadata = json.load(f)
-                except:
-                    pass
+                except Exception as e:
+                    app.logger.warning(f"Failed to load metadata from {metadata_file}: {str(e)}")
 
             backups.append({
                 'filename': filename,
@@ -1394,8 +1655,8 @@ def list_backups():
                     import json
                     with open(metadata_file, 'r') as f:
                         metadata = json.load(f)
-                except:
-                    pass
+                except Exception as e:
+                    app.logger.warning(f"Failed to load metadata from {metadata_file}: {str(e)}")
 
             backups.append({
                 'filename': filename,

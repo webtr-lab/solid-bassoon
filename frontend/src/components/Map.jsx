@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import logger from '../utils/logger';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -143,7 +144,7 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
         alert('Failed to save location');
       }
     } catch (error) {
-      console.error('Error saving location:', error);
+      logger.error('Error saving location', error);
       alert('Error saving location');
     }
   };
@@ -208,7 +209,7 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
       setSearchResults(data);
       setShowResults(true);
     } catch (error) {
-      console.error('Error searching address:', error);
+      logger.error('Error searching address', error);
       setSearchResults([]);
     } finally {
       setSearching(false);
@@ -225,10 +226,14 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
   };
 
   const handleSaveSearchToPOI = async () => {
-    if (!searchMarker) return;
+    if (!searchMarker) {
+return;
+}
 
     const locationName = prompt('Enter a name for this place:', searchMarker.name.split(',')[0]);
-    if (!locationName) return;
+    if (!locationName) {
+return;
+}
 
     const address = prompt('Enter address (optional):', searchMarker.name);
     const area = prompt('Enter area/district (optional):', '');
@@ -278,7 +283,7 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
         alert(data.error || 'Failed to save place');
       }
     } catch (error) {
-      console.error('Error saving place:', error);
+      logger.error('Error saving place', error);
       alert('Error saving place');
     }
   };
@@ -302,7 +307,7 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
   const createSavedLocationIcon = () => {
     return L.divIcon({
       className: 'custom-div-icon',
-      html: `<div style="background-color: #fbbf24; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
+      html: '<div style="background-color: #fbbf24; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
       iconSize: [20, 20],
       iconAnchor: [10, 10],
     });
@@ -311,7 +316,7 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
   const createPOIIcon = () => {
     return L.divIcon({
       className: 'custom-div-icon',
-      html: `<div style="background-color: #ec4899; width: 28px; height: 28px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 16px;">📍</div>`,
+      html: '<div style="background-color: #ec4899; width: 28px; height: 28px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 16px;">📍</div>',
       iconSize: [28, 28],
       iconAnchor: [14, 14],
     });
@@ -329,7 +334,9 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
         <MapController center={center} zoom={zoom} />
         
         {!selectedVehicle && showVehicles && vehicles.map((vehicle, idx) => {
-          if (!vehicle.lastLocation) return null;
+          if (!vehicle.lastLocation) {
+return null;
+}
           const color = vehicleColors[idx % vehicleColors.length];
 
           return (
@@ -471,7 +478,7 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
               placeholder="Search address..."
               className="flex-1 outline-none text-sm"
             />
-	    {searchQuery && (
+            {searchQuery && (
               <button
                 onClick={handleClearSearch}
                 className="ml-2 text-gray-400 hover:text-gray-600"
@@ -525,7 +532,7 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
           
           {showResults && searchResults.length === 0 && !searching && searchQuery.length >= 3 && (
             <div className="p-4 text-center text-sm text-gray-500">
-              No results found for "{searchQuery}"
+              No results found for &quot;{searchQuery}&quot;
             </div>
           )}
         </div>

@@ -11,7 +11,7 @@ function VehicleList({ vehicles, selectedVehicle, onSelectVehicle, collapsed = f
           <button
             onClick={onToggleCollapse}
             className="p-1 hover:bg-gray-100 rounded transition-colors"
-            title={collapsed ? "Expand vehicle list" : "Collapse vehicle list"}
+            title={collapsed ? 'Expand vehicle list' : 'Collapse vehicle list'}
           >
             <svg
               className={`w-5 h-5 text-gray-600 transition-transform ${collapsed ? 'rotate-180' : ''}`}

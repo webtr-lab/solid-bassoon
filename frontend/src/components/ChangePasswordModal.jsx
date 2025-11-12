@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import logger from '../utils/logger';
 
 function ChangePasswordModal({ onPasswordChanged, onCancel, canCancel = false }) {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -46,7 +47,7 @@ function ChangePasswordModal({ onPasswordChanged, onCancel, canCancel = false })
       }
     } catch (error) {
       setError('Network error. Please try again.');
-      console.error('Error:', error);
+      logger.error('Change password error', error);
     } finally {
       setLoading(false);
     }

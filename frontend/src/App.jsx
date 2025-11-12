@@ -7,24 +7,30 @@ import AdminPanel from './components/AdminPanel';
 import Login from './components/Login';
 import PlacesList from './components/PlacesList';
 import ChangePasswordModal from './components/ChangePasswordModal';
+import ErrorAlert from './components/ErrorAlert';
+import ErrorBoundary from './components/ErrorBoundary';
+import { apiFetch, getErrorMessage, isAuthError } from './utils/apiClient';
+import logger from './utils/logger';
+import { MAP_CONFIG, REFRESH_INTERVALS, ADMIN_ROLES, HISTORY_WINDOWS } from './constants';
 
 // Role permissions checker
 const canAccessAdmin = (userRole) => {
-  return ['admin', 'manager'].includes(userRole);
+  return ADMIN_ROLES.includes(userRole);
 };
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activeView, setActiveView] = useState('tracking');
   const [vehicles, setVehicles] = useState([]);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [vehicleHistory, setVehicleHistory] = useState([]);
   const [savedLocations, setSavedLocations] = useState([]);
   const [placesOfInterest, setPlacesOfInterest] = useState([]);
-  const [mapCenter, setMapCenter] = useState([5.8520, -55.2038]);
-  const [mapZoom, setMapZoom] = useState(13);
+  const [mapCenter, setMapCenter] = useState(MAP_CONFIG.DEFAULT_CENTER);
+  const [mapZoom, setMapZoom] = useState(MAP_CONFIG.DEFAULT_ZOOM);
   const [historyHours, setHistoryHours] = useState(24);
   const [showVehiclesOnMap, setShowVehiclesOnMap] = useState(true);
   const [vehicleListCollapsed, setVehicleListCollapsed] = useState(false);
@@ -35,17 +41,17 @@ function App() {
 
   const checkAuth = async () => {
     try {
-      const response = await fetch('/api/auth/check', {
-        credentials: 'include'
-      });
-      const data = await response.json();
-      
+      const data = await apiFetch('/api/auth/check');
+
       if (data.authenticated) {
         setIsAuthenticated(true);
         setCurrentUser(data.user);
+        setError(null);
       }
-    } catch (error) {
-      console.error('Auth check error:', error);
+    } catch (err) {
+      logger.error('Auth check error', err);
+      // Don't show error for auth check - just leave user logged out
+      setIsAuthenticated(false);
     } finally {
       setLoading(false);
     }
@@ -63,86 +69,83 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        credentials: 'include'
-      });
+      await apiFetch('/api/auth/logout', { method: 'POST' });
       setIsAuthenticated(false);
       setCurrentUser(null);
       setVehicles([]);
       setSelectedVehicle(null);
       setActiveView('tracking');
-    } catch (error) {
-      console.error('Logout error:', error);
+      setError(null);
+    } catch (err) {
+      const errorMsg = getErrorMessage(err, 'Logout failed');
+      setError(errorMsg);
+      logger.error('Logout error', err);
     }
   };
 
   const fetchVehicles = async () => {
     try {
-      const response = await fetch('/api/vehicles', {
-        credentials: 'include'
-      });
-      const vehiclesData = await response.json();
+      const vehiclesData = await apiFetch('/api/vehicles');
 
       const vehiclesWithLocations = await Promise.all(
         vehiclesData.data.map(async (vehicle) => {
           try {
-            const locResponse = await fetch(`/api/vehicles/${vehicle.id}/location`, {
-              credentials: 'include'
-            });
-            if (locResponse.ok) {
-              const location = await locResponse.json();
-              return { ...vehicle, lastLocation: location };
-            }
+            const location = await apiFetch(`/api/vehicles/${vehicle.id}/location`);
+            return { ...vehicle, lastLocation: location };
           } catch (err) {
-            console.log(`No location for vehicle ${vehicle.id}`);
+            // Vehicle may not have a location yet, that's okay
+            logger.debug(`No location for vehicle ${vehicle.id}`);
+            return vehicle;
           }
-          return vehicle;
         })
       );
-      
+
       setVehicles(vehiclesWithLocations);
-    } catch (error) {
-      console.error('Error fetching vehicles:', error);
+      setError(null);
+    } catch (err) {
+      const errorMsg = getErrorMessage(err, 'Failed to load vehicles');
+      setError(errorMsg);
+      logger.error('Error fetching vehicles', err);
+      // If auth error, re-check auth
+      if (isAuthError(err)) {
+        checkAuth();
+      }
     }
   };
 
   const fetchVehicleHistory = async (vehicleId) => {
     try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/history?hours=${historyHours}`, {
-        credentials: 'include'
-      });
-      const data = await response.json();
+      const data = await apiFetch(`/api/vehicles/${vehicleId}/history?hours=${historyHours}`);
       setVehicleHistory(data);
-    } catch (error) {
-      console.error('Error fetching history:', error);
+      setError(null);
+    } catch (err) {
+      logger.error('Error fetching history', err);
       setVehicleHistory([]);
+      // Don't show error for non-critical data loading
     }
   };
 
   const fetchSavedLocations = async (vehicleId) => {
     try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/saved-locations`, {
-        credentials: 'include'
-      });
-      const data = await response.json();
+      const data = await apiFetch(`/api/vehicles/${vehicleId}/saved-locations`);
       setSavedLocations(data);
-    } catch (error) {
-      console.error('Error fetching saved locations:', error);
+      setError(null);
+    } catch (err) {
+      logger.error('Error fetching saved locations', err);
       setSavedLocations([]);
+      // Don't show error for non-critical data loading
     }
   };
 
   const fetchPlacesOfInterest = async () => {
     try {
-      const response = await fetch('/api/places-of-interest', {
-        credentials: 'include'
-      });
-      const data = await response.json();
+      const data = await apiFetch('/api/places-of-interest');
       setPlacesOfInterest(data.data);
-    } catch (error) {
-      console.error('Error fetching places of interest:', error);
+      setError(null);
+    } catch (err) {
+      logger.error('Error fetching places of interest', err);
       setPlacesOfInterest([]);
+      // Don't show error for non-critical data loading
     }
   };
 
@@ -153,7 +156,7 @@ function App() {
       const interval = setInterval(() => {
         fetchVehicles();
         fetchPlacesOfInterest();
-      }, 5000);
+      }, REFRESH_INTERVALS.VEHICLES);
       return () => clearInterval(interval);
     }
   }, [isAuthenticated, activeView]);
@@ -162,12 +165,12 @@ function App() {
     if (selectedVehicle && isAuthenticated) {
       fetchVehicleHistory(selectedVehicle.id);
       fetchSavedLocations(selectedVehicle.id);
-      
+
       const interval = setInterval(() => {
         fetchVehicleHistory(selectedVehicle.id);
         fetchSavedLocations(selectedVehicle.id);
-      }, 10000);
-      
+      }, REFRESH_INTERVALS.HISTORY);
+
       return () => clearInterval(interval);
     } else {
       setVehicleHistory([]);
@@ -179,8 +182,8 @@ function App() {
     setSelectedVehicle(vehicle);
     // Reset map center/zoom when deselecting vehicle
     if (!vehicle) {
-      setMapCenter([5.8520, -55.2038]);
-      setMapZoom(13);
+      setMapCenter(MAP_CONFIG.DEFAULT_CENTER);
+      setMapZoom(MAP_CONFIG.DEFAULT_ZOOM);
     }
   };
 
@@ -228,7 +231,9 @@ function App() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-100">
+    <ErrorBoundary>
+      <div className="h-screen flex flex-col bg-gray-100">
+      <ErrorAlert message={error} onDismiss={() => setError(null)} />
       <header className="bg-blue-600 text-white p-4 shadow-lg">
         <div className="flex justify-between items-center">
           <div>
@@ -303,7 +308,7 @@ function App() {
             
             {/* Only show PlacesList when no vehicle is selected */}
             {!selectedVehicle && placesOfInterest.length > 0 && (
-              <div className={vehicleListCollapsed ? "flex-1 flex flex-col min-h-0" : ""}>
+              <div className={vehicleListCollapsed ? 'flex-1 flex flex-col min-h-0' : ''}>
                 <PlacesList
                   places={placesOfInterest}
                   onPlaceClick={(place) => {
@@ -321,11 +326,11 @@ function App() {
                     onChange={(e) => setHistoryHours(Number(e.target.value))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <option value={1}>Last 1 hour</option>
-                    <option value={6}>Last 6 hours</option>
-                    <option value={24}>Last 24 hours</option>
-                    <option value={72}>Last 3 days</option>
-                    <option value={168}>Last 7 days</option>
+                    {HISTORY_WINDOWS.map((window) => (
+                      <option key={window.value} value={window.value}>
+                        {window.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 
@@ -368,13 +373,14 @@ function App() {
             <div className="text-center">
               <div className="text-6xl mb-4">🔒</div>
               <h2 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h2>
-              <p className="text-gray-600">You don't have permission to access admin panel.</p>
+              <p className="text-gray-600">You don&apos;t have permission to access admin panel.</p>
               <p className="text-sm text-gray-500 mt-2">Your role: {currentUser?.role}</p>
             </div>
           </div>
         )
       )}
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }
 

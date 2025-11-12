@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import logger from '../utils/logger';
 
 function VehicleHistory({ savedLocations, onRefresh, vehicleId }) {
   const [editingId, setEditingId] = useState(null);
@@ -30,7 +31,7 @@ function VehicleHistory({ savedLocations, onRefresh, vehicleId }) {
         onRefresh();
       }
     } catch (error) {
-      console.error('Error updating location:', error);
+      logger.error('Error updating location', error);
     }
   };
 
@@ -49,7 +50,7 @@ function VehicleHistory({ savedLocations, onRefresh, vehicleId }) {
         onRefresh();
       }
     } catch (error) {
-      console.error('Error deleting location:', error);
+      logger.error('Error deleting location', error);
     }
   };
 

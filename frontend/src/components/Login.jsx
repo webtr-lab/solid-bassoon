@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import logger from '../utils/logger';
 
 function Login({ onLoginSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -43,7 +44,7 @@ function Login({ onLoginSuccess }) {
       }
     } catch (error) {
       setError('Network error. Please try again.');
-      console.error('Error:', error);
+      logger.error('Login/Registration error', error);
     } finally {
       setLoading(false);
     }

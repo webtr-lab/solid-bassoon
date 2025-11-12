@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import logger from '../utils/logger';
 
 function VehicleStats({ vehicleId, historyHours }) {
   const [stats, setStats] = useState(null);
@@ -17,7 +18,7 @@ function VehicleStats({ vehicleId, historyHours }) {
       const data = await response.json();
       setStats(data);
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      logger.error('Error fetching stats', error);
     }
   };
 
@@ -36,7 +37,7 @@ function VehicleStats({ vehicleId, historyHours }) {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error('Error exporting data:', error);
+      logger.error('Error exporting data', error);
     }
   };
 
