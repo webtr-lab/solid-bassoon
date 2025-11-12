@@ -10,6 +10,9 @@ from app.security import (
     login_rate_limiter, validate_email, validate_password_strength, PaginationParams,
     log_audit_event, validate_url
 )
+from app.routes.health import health_bp
+from app.routes.auth import auth_bp
+from app.routes.locations import locations_bp
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import math
@@ -37,6 +40,11 @@ db.init_app(app)
 bcrypt = Bcrypt(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
+
+# Register blueprints
+app.register_blueprint(health_bp)
+app.register_blueprint(auth_bp)
+app.register_blueprint(locations_bp)
 
 @login_manager.user_loader
 def load_user(user_id):
