@@ -17,6 +17,8 @@ from app.routes.vehicles import vehicles_bp
 from app.routes.places import places_bp
 from app.routes.geocoding import geocoding_bp
 from app.routes.reports import reports_bp
+from app.routes.backups import backups_bp
+from app.services.backup_service import automatic_backup
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import math
@@ -53,6 +55,7 @@ app.register_blueprint(vehicles_bp)
 app.register_blueprint(places_bp)
 app.register_blueprint(geocoding_bp)
 app.register_blueprint(reports_bp)
+app.register_blueprint(backups_bp)
 
 @login_manager.user_loader
 def load_user(user_id):
