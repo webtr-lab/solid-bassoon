@@ -14,6 +14,9 @@ from app.routes.health import health_bp
 from app.routes.auth import auth_bp
 from app.routes.locations import locations_bp
 from app.routes.vehicles import vehicles_bp
+from app.routes.places import places_bp
+from app.routes.geocoding import geocoding_bp
+from app.routes.reports import reports_bp
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import math
@@ -47,6 +50,9 @@ app.register_blueprint(health_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(locations_bp)
 app.register_blueprint(vehicles_bp)
+app.register_blueprint(places_bp)
+app.register_blueprint(geocoding_bp)
+app.register_blueprint(reports_bp)
 
 @login_manager.user_loader
 def load_user(user_id):
