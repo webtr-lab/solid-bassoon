@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import logger from '../utils/logger';
+import { createColoredIcon, createSavedLocationIcon, createPOIIcon, vehicleColors } from '../utils/markerIcons';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -9,8 +10,6 @@ L.Icon.Default.mergeOptions({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
-
-const vehicleColors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'];
 
 function MapClickHandler({ onMapClick, pinMode }) {
   useMap();
@@ -293,33 +292,6 @@ return;
     setSearchResults([]);
     setShowResults(false);
     setSearchMarker(null);  // ADD THIS LINE
-  };
-
-  const createColoredIcon = (color) => {
-    return L.divIcon({
-      className: 'custom-div-icon',
-      html: `<div style="background-color: ${color}; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12],
-    });
-  };
-
-  const createSavedLocationIcon = () => {
-    return L.divIcon({
-      className: 'custom-div-icon',
-      html: '<div style="background-color: #fbbf24; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
-      iconSize: [20, 20],
-      iconAnchor: [10, 10],
-    });
-  };
-
-  const createPOIIcon = () => {
-    return L.divIcon({
-      className: 'custom-div-icon',
-      html: '<div style="background-color: #ec4899; width: 28px; height: 28px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 16px;">📍</div>',
-      iconSize: [28, 28],
-      iconAnchor: [14, 14],
-    });
   };
 
   return (
