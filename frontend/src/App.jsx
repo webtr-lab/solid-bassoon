@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Map from './components/Map';
-import VehicleList from './components/VehicleList';
-import VehicleHistory from './components/VehicleHistory';
-import VehicleStats from './components/VehicleStats';
+import TrackingPanel from './components/TrackingPanel';
 import AdminPanel from './components/AdminPanel';
 import Login from './components/Login';
-import PlacesList from './components/PlacesList';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import ErrorAlert from './components/ErrorAlert';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -33,7 +30,6 @@ function App() {
   const [mapZoom, setMapZoom] = useState(MAP_CONFIG.DEFAULT_ZOOM);
   const [historyHours, setHistoryHours] = useState(24);
   const [showVehiclesOnMap, setShowVehiclesOnMap] = useState(true);
-  const [vehicleListCollapsed, setVehicleListCollapsed] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -281,72 +277,26 @@ function App() {
       
       {activeView === 'tracking' ? (
         <div className="flex-1 flex gap-4 p-4 overflow-hidden">
-          <aside className="w-80 flex flex-col gap-4 overflow-y-auto">
-            {/* Toggle for showing/hiding vehicles on map */}
-            <div className="bg-white rounded-lg shadow p-4">
-              <label className="flex items-center justify-between cursor-pointer">
-                <span className="text-sm font-medium text-gray-700">Show Vehicles on Map</span>
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={showVehiclesOnMap}
-                    onChange={(e) => setShowVehiclesOnMap(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </div>
-              </label>
-            </div>
-
-                <VehicleList
-              vehicles={vehicles}
-              selectedVehicle={selectedVehicle}
-              onSelectVehicle={handleSelectVehicle}
-              collapsed={vehicleListCollapsed}
-              onToggleCollapse={() => setVehicleListCollapsed(!vehicleListCollapsed)}
-            />
-            
-            {/* Only show PlacesList when no vehicle is selected */}
-            {!selectedVehicle && placesOfInterest.length > 0 && (
-              <div className={vehicleListCollapsed ? 'flex-1 flex flex-col min-h-0' : ''}>
-                <PlacesList
-                  places={placesOfInterest}
-                  onPlaceClick={(place) => {
-                    setMapCenter([place.latitude, place.longitude]);
-                    setMapZoom(16);
-                  }}
-                />
-              </div>
-            )}            {selectedVehicle && (
-              <>
-                <div className="bg-white rounded-lg shadow p-4">
-                  <label className="block text-sm font-medium mb-2">History Duration</label>
-                  <select
-                    value={historyHours}
-                    onChange={(e) => setHistoryHours(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    {HISTORY_WINDOWS.map((window) => (
-                      <option key={window.value} value={window.value}>
-                        {window.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <VehicleHistory
-                  savedLocations={savedLocations}
-                  onRefresh={() => fetchSavedLocations(selectedVehicle.id)}
-                  vehicleId={selectedVehicle.id}
-                />
-                
-                <VehicleStats
-                  vehicleId={selectedVehicle.id}
-                  historyHours={historyHours}
-                />
-              </>
-            )}
-          </aside>
+          <TrackingPanel
+            vehicles={vehicles}
+            selectedVehicle={selectedVehicle}
+            onSelectVehicle={handleSelectVehicle}
+            placesOfInterest={placesOfInterest}
+            onPlaceClick={(place) => {
+              setMapCenter([place.latitude, place.longitude]);
+              setMapZoom(16);
+            }}
+            savedLocations={savedLocations}
+            historyHours={historyHours}
+            onHistoryHoursChange={setHistoryHours}
+            onRefreshLocations={() => {
+              if (selectedVehicle) {
+                fetchSavedLocations(selectedVehicle.id);
+              }
+            }}
+            showVehiclesOnMap={showVehiclesOnMap}
+            onToggleShowVehicles={setShowVehiclesOnMap}
+          />
 
           <main className="flex-1 bg-white rounded-lg shadow overflow-hidden">
             <Map
