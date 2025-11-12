@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Script Execution Notification</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 0;
+        }
+        .email-container {
+            max-width: 700px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        /* Header Styles - Dynamic based on status */
+        .header {
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header.status-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+        .header.status-warning {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        }
+        .header.status-critical {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .script-name {
+            font-family: 'Courier New', monospace;
+            font-size: 20px;
+            margin-top: 10px;
+            background-color: rgba(255,255,255,0.2);
+            padding: 8px 16px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+        .status-badge {
+            display: inline-block;
+            background-color: rgba(255,255,255,0.3);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-top: 10px;
+            font-weight: 500;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        /* Info Grid */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+            background-color: #f9fafb;
+            padding: 20px;
+            border-radius: 6px;
+        }
+        .info-grid.status-success {
+            border-left: 4px solid #10b981;
+        }
+        .info-grid.status-warning {
+            border-left: 4px solid #f59e0b;
+        }
+        .info-grid.status-critical {
+            border-left: 4px solid #ef4444;
+        }
+        .info-grid.five-items .info-item:last-child {
+            grid-column: 1 / -1;
+        }
+        .info-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .info-label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        .info-value {
+            font-size: 15px;
+            color: #111827;
+            font-weight: 500;
+        }
+        
+        /* Alert Boxes */
+        .alert-box {
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .alert-box.status-success {
+            background-color: #ecfdf5;
+            border: 1px solid #a7f3d0;
+        }
+        .alert-box.status-warning {
+            background-color: #fffbeb;
+            border: 1px solid #fde68a;
+        }
+        .alert-box.status-critical {
+            background-color: #fef2f2;
+            border: 1px solid #fecaca;
+        }
+        .alert-icon {
+            font-size: 24px;
+        }
+        .alert-text {
+            font-weight: 500;
+            font-size: 15px;
+        }
+        .alert-box.status-success .alert-text {
+            color: #065f46;
+        }
+        .alert-box.status-warning .alert-text {
+            color: #92400e;
+        }
+        .alert-box.status-critical .alert-text {
+            color: #991b1b;
+        }
+        
+        /* Section Styles */
+        .section {
+            margin-bottom: 30px;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        /* Execution Details */
+        .detail-box {
+            background-color: #f9fafb;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+        .detail-box.status-success {
+            border-left: 4px solid #10b981;
+        }
+        .detail-box.status-warning {
+            border-left: 4px solid #f59e0b;
+        }
+        .detail-box.status-critical {
+            border-left: 4px solid #ef4444;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        .detail-label {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .detail-value {
+            color: #111827;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        /* Output/Log Section */
+        .output-box {
+            background-color: #1f2937;
+            color: #e5e7eb;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        /* Statistics Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .stat-card {
+            background-color: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+        
+        /* Footer */
+        .footer {
+            background-color: #f9fafb;
+            padding: 25px 30px;
+            border-top: 1px solid #e5e7eb;
+        }
+        .footer-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 8px;
+        }
+        .footer-text {
+            font-size: 13px;
+            color: #6b7280;
+            margin: 0;
+        }
+        .timestamp {
+            text-align: center;
+            color: #9ca3af;
+            font-size: 12px;
+            padding: 15px;
+            background-color: #f9fafb;
+        }
+        
+        @media only screen and (max-width: 600px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            .email-container {
+                margin: 0;
+                border-radius: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- 
+        =============================================================================
+        INSTRUCTIONS FOR USE:
+        =============================================================================
+        
+        Replace the following placeholders with actual values:
+        
+        1. STATUS CLASS (multiple locations):
+           - Change "status-success" to one of: status-success, status-warning, status-critical
+           - Update in: header, info-grid, alert-box, detail-box classes
+        
+        2. STATUS ICON AND TEXT:
+           - Success: ✓ and "SUCCESS"
+           - Warning: ⚠ and "WARNING"
+           - Critical: ✕ and "CRITICAL"
+        
+        3. SCRIPT INFORMATION:
+           - {{SCRIPT_NAME}} - e.g., backup-manager.sh
+           - {{SCRIPT_TYPE}} - e.g., Backup Script, Monitoring Script
+           - {{APPLICATION}} - e.g., Maps Tracker
+           - {{SERVER}} - e.g., racknerd-f282c00
+           - {{ENVIRONMENT}} - e.g., Production
+           - {{DOMAIN}} - e.g., Devnan Agencies, Inc.
+        
+        4. EXECUTION DETAILS:
+           - {{START_TIME}} - e.g., 2025-11-12 02:00:00
+           - {{END_TIME}} - e.g., 2025-11-12 02:02:34
+           - {{DURATION}} - e.g., 2m 34s
+           - {{EXIT_CODE}} - e.g., 0
+           - {{PID}} - e.g., 12345
+        
+        5. STATUS MESSAGE:
+           - {{STATUS_MESSAGE}} - e.g., "Script completed successfully"
+        
+        6. STATISTICS (optional):
+           - {{STAT1_VALUE}}, {{STAT1_LABEL}}
+           - {{STAT2_VALUE}}, {{STAT2_LABEL}}
+           - {{STAT3_VALUE}}, {{STAT3_LABEL}}
+        
+        7. OUTPUT/LOGS:
+           - {{SCRIPT_OUTPUT}} - Last 20 lines of output or relevant log content
+        
+        =============================================================================
+        -->
+        
+        <!-- Header - Change class to: status-success, status-warning, or status-critical -->
+        <div class="header status-success">
+            <h1>
+                <span>✓</span>
+                SCRIPT EXECUTION NOTIFICATION
+            </h1>
+            <div class="script-name">backup-manager.sh</div>
+            <div class="status-badge">SUCCESS</div>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <!-- System Information -->
+            <div class="info-grid five-items status-success">
+                <div class="info-item">
+                    <div class="info-label">Script Type</div>
+                    <div class="info-value">Backup Script</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Application</div>
+                    <div class="info-value">Maps Tracker</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Server</div>
+                    <div class="info-value">racknerd-f282c00</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Environment</div>
+                    <div class="info-value">Production</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Domain</div>
+                    <div class="info-value">Devnan Agencies, Inc.</div>
+                </div>
+            </div>
+
+            <!-- Status Alert - Change class based on status -->
+            <div class="alert-box status-success">
+                <div class="alert-icon">✓</div>
+                <div class="alert-text">Script completed successfully - No action required</div>
+            </div>
+
+            <!-- Execution Details -->
+            <div class="section">
+                <div class="section-title">Execution Details</div>
+                <div class="detail-box status-success">
+                    <div class="detail-row">
+                        <span class="detail-label">Start Time</span>
+                        <span class="detail-value">2025-11-12 02:00:00</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">End Time</span>
+                        <span class="detail-value">2025-11-12 02:02:34</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Duration</span>
+                        <span class="detail-value">2m 34s</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Exit Code</span>
+                        <span class="detail-value">0</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Process ID</span>
+                        <span class="detail-value">12345</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics (Optional - Remove if not needed) -->
+            <div class="section">
+                <div class="section-title">Execution Statistics</div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">7</div>
+                        <div class="stat-label">Backups Created</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">33 MB</div>
+                        <div class="stat-label">Total Size</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">100%</div>
+                        <div class="stat-label">Success Rate</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Script Output/Logs -->
+            <div class="section">
+                <div class="section-title">Script Output</div>
+                <div class="output-box">[2025-11-12 02:00:00] Starting backup process...
+[2025-11-12 02:00:05] Checking backup directory: /var/backups/postgres
+[2025-11-12 02:00:10] Creating new backup: backup_20251112_020000.sql
+[2025-11-12 02:00:45] Backup created successfully
+[2025-11-12 02:01:20] Verifying backup integrity...
+[2025-11-12 02:02:15] Integrity check passed
+[2025-11-12 02:02:30] Cleaning up old backups (180 day retention)
+[2025-11-12 02:02:34] Backup process completed successfully
+[2025-11-12 02:02:34] Exit code: 0</div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-title">Support Contact</div>
+            <p class="footer-text">Contact: System Administrator</p>
+            <p class="footer-text">Server: racknerd-f282c00</p>
+            <p class="footer-text">For issues or questions, please contact the system administrator</p>
+        </div>
+
+        <!-- Timestamp -->
+        <div class="timestamp">
+            Report generated: 2025-11-12 02:02:34
+        </div>
+    </div>
+</body>
+</html>

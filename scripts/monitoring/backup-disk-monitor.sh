@@ -371,6 +371,76 @@ Consider archiving or deleting old backups to free space."
     else
         alert_status="NORMAL"
         log_info "Disk usage within normal limits"
+        # Send success notification when disk usage is healthy
+        local success_details="Backup partition usage: ${fs_usage}%
+
+Backup Directory:
+  Total size: ${total_size}
+  Files: ${total_backups} backups
+  Status: ${compression_status}
+
+Filesystem:
+  Used: ${fs_usage}%
+  Available: ${fs_available} bytes
+  Total: ${fs_total} bytes
+
+Compression Ratio: ${compression_ratio}%
+
+✓ All systems normal - No action required"
+
+        # Send success email
+        local subject="[Maps Tracker Backup Disk Monitor] ✓ NORMAL - All Systems Healthy"
+        local email_body="════════════════════════════════════════════════════════════════
+✓ BACKUP DISK USAGE MONITORING - HEALTHY STATUS
+════════════════════════════════════════════════════════════════
+
+Application:     Maps Tracker (Vehicle Tracking System)
+Server:          $(hostname)
+Environment:     Production
+Alert Type:      Daily Backup Storage Monitoring
+Status:          NORMAL - All systems operational
+Timestamp:       $(date '+%Y-%m-%d %H:%M:%S')
+
+STORAGE STATUS:
+──────────────────────────────────────────────────────────────────
+${success_details}
+
+BACKUP PERFORMANCE:
+──────────────────────────────────────────────────────────────────
+✓ Full backups: Weekly on Sundays at 2:00 AM
+✓ Daily incremental: Mon-Sat at 2:00 AM
+✓ Automatic cleanup: 180-day retention enforced
+✓ Compression: Applied to backups >30 days old
+✓ Remote sync: Daily to 199.21.113.121
+
+NEXT SCHEDULED MAINTENANCE:
+──────────────────────────────────────────────────────────────────
+• Backup verification: Daily at 2:15 AM
+• Cleanup of old backups: Daily at 2:30 AM
+• Archive compression: Daily at 3:00 AM
+• Disk monitoring: Daily at 3:30 AM
+• Remote backup sync: Daily at 4:00 AM
+• System health check: Daily at 5:00 AM
+
+SUPPORT CONTACT:
+──────────────────────────────────────────────────────────────────
+Contact: System Administrator
+Frequency: Daily monitoring at 3:30 AM
+════════════════════════════════════════════════════════════════"
+
+        # Send email using available method
+        if [ "$EMAIL_ENABLED" == "true" ]; then
+            local SEND_EMAIL_SCRIPT="${BASE_DIR}/scripts/email/send-email.sh"
+            if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
+                "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${MONITOR_LOG}"
+            elif command -v mail &> /dev/null || command -v mailx &> /dev/null; then
+                local MAIL_CMD="mail"
+                if command -v mailx &> /dev/null; then
+                    MAIL_CMD="mailx"
+                fi
+                echo "$email_body" | $MAIL_CMD -s "$subject" "$EMAIL_RECIPIENT" 2>&1 | tee -a "${MONITOR_LOG}"
+            fi
+        fi
     fi
 
     log_info "=========================================="

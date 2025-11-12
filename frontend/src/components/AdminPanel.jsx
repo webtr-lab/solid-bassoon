@@ -92,7 +92,7 @@ function UserManagement() {
     try {
       const response = await fetch('/api/users', { credentials: 'include' });
       const data = await response.json();
-      setUsers(data);
+      setUsers(data.data);
     } catch (error) {
       console.error('Error fetching users:', error);
     }
@@ -444,7 +444,7 @@ function VehicleManagement() {
     try {
       const response = await fetch('/api/vehicles', { credentials: 'include' });
       const data = await response.json();
-      setVehicles(data);
+      setVehicles(data.data);
     } catch (error) {
       console.error('Error fetching vehicles:', error);
     }
@@ -752,7 +752,7 @@ function POIManagement() {
 
       const response = await fetch(url + params.toString(), { credentials: 'include' });
       const data = await response.json();
-      setPlaces(data);
+      setPlaces(data.data);
     } catch (error) {
       console.error('Error fetching places:', error);
     }

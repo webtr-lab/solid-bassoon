@@ -66,13 +66,13 @@ echo ""
 log_info "Creating and securing logs directory"
 mkdir -p "${BASE_DIR}/logs"
 chown "$(id -u):$(id -g)" "${BASE_DIR}/logs"
-chmod 777 "${BASE_DIR}/logs"
+chmod 750 "${BASE_DIR}/logs"
 
 # Create and set permissions for backups directory
 log_info "Creating and securing backups directory"
 mkdir -p "${BASE_DIR}/backups"
 chown "$(id -u):$(id -g)" "${BASE_DIR}/backups"
-chmod 777 "${BASE_DIR}/backups"
+chmod 750 "${BASE_DIR}/backups"
 
 # Create and set permissions for database directory
 log_info "Creating and securing database directory"

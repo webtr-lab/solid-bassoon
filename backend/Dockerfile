@@ -17,13 +17,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/
 
-# Create non-root user for running the application
-# This ensures files in mounted volumes are created with proper ownership
-RUN groupadd -r appuser && useradd -r -g appuser appuser && \
+# Create non-root user for running the application with explicit UID for host mapping
+# UID 1000 is the default first non-root user on most Linux systems
+# This ensures proper file ownership when mounted on the host
+RUN groupadd -r appuser && useradd -r -u 1000 -g appuser appuser && \
     chown -R appuser:appuser /app && \
-    # Ensure logs and backups directories exist with proper permissions
+    # Ensure logs and backups directories exist with secure permissions (owner+group only)
     mkdir -p /app/logs /app/backups && \
-    chmod 777 /app/logs /app/backups
+    chmod 750 /app/logs /app/backups
 USER appuser
 
 EXPOSE 5000

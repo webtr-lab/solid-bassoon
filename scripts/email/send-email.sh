@@ -3,10 +3,17 @@
 # Maps Tracker SMTP Email Relay
 # Sends emails via external SMTP server without requiring system mail configuration
 #
-# Usage: ./send-email.sh <recipient> <subject> <message>
+# Usage: ./send-email.sh <recipient> <subject> <message> [--html]
+#
+# Arguments:
+#   recipient: Email recipient address
+#   subject:   Email subject line
+#   message:   Email message body (plain text or HTML)
+#   --html:    Optional flag to send as HTML email (default: plain text)
 #
 # Features:
 #   - Direct SMTP_SSL connection (port 465)
+#   - Support for both plain text and HTML email formats
 #   - No sudo required
 #   - No system mail server dependency
 #   - Works immediately without service restart
@@ -22,6 +29,11 @@
 #              - Prevents rate limiting by SMTP server
 #              - Configurable via environment variable
 #              - Example: SMTP_DELAY=20 ./send-email.sh ...
+#
+# Examples:
+#   ./send-email.sh user@example.com "Subject" "Message body"
+#   ./send-email.sh admin@company.com "Backup Status" "Daily backup completed successfully"
+#   ./send-email.sh user@example.com "Subject" "<html>...</html>" --html
 #
 
 set -e
@@ -57,14 +69,20 @@ if [ -z "$SMTP_HOST" ] || [ -z "$SMTP_PORT" ] || [ -z "$SMTP_USER" ] || [ -z "$S
     exit 1
 fi
 
-# Recipient and message from arguments
+# Recipient, subject, and message from arguments
 RECIPIENT="$1"
 SUBJECT="$2"
 MESSAGE="$3"
+IS_HTML="false"
+
+# Check for --html flag
+if [ "$4" = "--html" ]; then
+    IS_HTML="true"
+fi
 
 # Validate inputs
 if [ -z "$RECIPIENT" ] || [ -z "$SUBJECT" ] || [ -z "$MESSAGE" ]; then
-    echo "Usage: $0 <recipient> <subject> <message>" >&2
+    echo "Usage: $0 <recipient> <subject> <message> [--html]" >&2
     exit 1
 fi
 
@@ -95,17 +113,17 @@ rate_limit_check() {
     date +%s > "${RATE_LIMIT_FILE}"
 }
 
-# Send email via SMTP
+# Send email via SMTP (supports both plain text and HTML)
 send_via_smtp() {
     local recipient=$1
     local subject=$2
     local message=$3
+    local is_html=$4
 
     python3 << PYTHON_EOF
 import smtplib
 import sys
 from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
 try:
@@ -118,6 +136,7 @@ try:
     recipient = "$recipient"
     subject = "$subject"
     message = """$message"""
+    is_html = "$is_html" == "true"
 
     # Connect to SMTP server with timeout
     print(f"Connecting to SMTP server: {smtp_host}:{smtp_port}")
@@ -134,15 +153,13 @@ try:
         server.quit()
         sys.exit(1)
 
-    # Create email message
-    msg = MIMEMultipart('alternative')
+    # Create email message (HTML or plain text)
+    msg_type = 'html' if is_html else 'plain'
+    msg = MIMEText(message, msg_type)
     msg['Subject'] = subject
     msg['From'] = smtp_user
     msg['To'] = recipient
     msg['Date'] = datetime.now().strftime('%a, %d %b %Y %H:%M:%S %z')
-
-    # Attach message body
-    msg.attach(MIMEText(message, 'plain'))
 
     # Send email with error checking
     print(f"Sending email to: {recipient}")
@@ -182,8 +199,9 @@ rate_limit_check
 # Log and send
 log_email "Sending email to: $RECIPIENT"
 log_email "Subject: $SUBJECT"
+log_email "Format: $([ "$IS_HTML" = "true" ] && echo "HTML" || echo "Plain Text")"
 
-if send_via_smtp "$RECIPIENT" "$SUBJECT" "$MESSAGE"; then
+if send_via_smtp "$RECIPIENT" "$SUBJECT" "$MESSAGE" "$IS_HTML"; then
     log_email "Status: SUCCESS"
     exit 0
 else

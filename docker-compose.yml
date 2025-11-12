@@ -130,5 +130,9 @@ volumes:
 # The init script will:
 # - Create ./logs, ./backups, ./database, ./nominatim-data directories
 # - Set owner to current user
-# - Set permissions: 777 for logs/backups (world-writable), 700 for database
+# - Set permissions: 750 for logs/backups (owner+group only, no world access), 700 for database
 # - Warn if containers are running and offer to stop them
+#
+# Security: Using UID 1000 (default first non-root user) in the appuser ensures
+# proper file ownership mapping. The backend container user (appuser) will have
+# the same UID as the host user, eliminating permission conflicts.

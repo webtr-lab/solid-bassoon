@@ -83,9 +83,9 @@ function App() {
         credentials: 'include'
       });
       const vehiclesData = await response.json();
-      
+
       const vehiclesWithLocations = await Promise.all(
-        vehiclesData.map(async (vehicle) => {
+        vehiclesData.data.map(async (vehicle) => {
           try {
             const locResponse = await fetch(`/api/vehicles/${vehicle.id}/location`, {
               credentials: 'include'
@@ -139,7 +139,7 @@ function App() {
         credentials: 'include'
       });
       const data = await response.json();
-      setPlacesOfInterest(data);
+      setPlacesOfInterest(data.data);
     } catch (error) {
       console.error('Error fetching places of interest:', error);
       setPlacesOfInterest([]);

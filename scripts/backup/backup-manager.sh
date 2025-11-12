@@ -719,13 +719,35 @@ main() {
             fi
             ;;
         --auto)
-            auto_backup
+            local backup_file=$(auto_backup)
+            if [ $? -eq 0 ] && [ -n "$backup_file" ]; then
+                # Determine backup type from filename
+                local backup_type="DAILY"
+                if [[ "$backup_file" == *"backup_full"* ]]; then
+                    backup_type="FULL"
+                fi
+                local backup_size=$(stat -c%s "${backup_file}" 2>/dev/null || stat -f%z "${backup_file}" || echo "0")
+                local size_human=$(numfmt --to=iec-i --suffix=B ${backup_size} 2>/dev/null || echo "${backup_size} bytes")
+                send_email_notification "success" "$backup_type" "$backup_file" "$size_human"
+            else
+                send_email_notification "failure" "AUTO" "unknown" "Auto backup failed"
+            fi
             ;;
         --cleanup)
             cleanup_old_backups
+            if [ $? -eq 0 ]; then
+                send_email_notification "success" "CLEANUP" "N/A" "Cleanup completed successfully"
+            else
+                send_email_notification "failure" "CLEANUP" "N/A" "Cleanup operation failed"
+            fi
             ;;
         --archive)
             archive_old_backups
+            if [ $? -eq 0 ]; then
+                send_email_notification "success" "ARCHIVE" "N/A" "Archiving completed successfully"
+            else
+                send_email_notification "failure" "ARCHIVE" "N/A" "Archiving operation failed"
+            fi
             ;;
         --list)
             list_backups

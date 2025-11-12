@@ -78,7 +78,8 @@ send_archive_notification() {
     local status=$1
     local details=$2
 
-    if [ "$EMAIL_ENABLED" != "true" ]; then
+    # Skip sending email if explicitly disabled
+    if [ "$BACKUP_EMAIL_ENABLED" == "false" ]; then
         return 0
     fi
 
