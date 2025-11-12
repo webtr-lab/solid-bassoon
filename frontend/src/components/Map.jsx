@@ -1,50 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, CircleMarker, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import PropTypes from 'prop-types';
+import { Marker, Popup } from 'react-leaflet';
 import logger from '../utils/logger';
 import { createColoredIcon, createSavedLocationIcon, createPOIIcon, vehicleColors } from '../utils/markerIcons';
+import MapDisplay from './Map/MapDisplay';
+import VehicleMarkersLayer from './Map/VehicleMarkersLayer';
+import SavedLocationsLayer from './Map/SavedLocationsLayer';
+import PointsOfInterestLayer from './Map/PointsOfInterestLayer';
+import AddressSearchBar from './Map/AddressSearchBar';
+import PinLocationButton from './Map/PinLocationButton';
 
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-});
-
-function MapClickHandler({ onMapClick, pinMode }) {
-  useMap();
-  const map = useMap();
-  
-  useEffect(() => {
-    const handleClick = (e) => {
-      if (pinMode) {
-        onMapClick(e.latlng);
-      }
-    };
-    
-    map.on('click', handleClick);
-    return () => {
-      map.off('click', handleClick);
-    };
-  }, [map, pinMode, onMapClick]);
-  
-  return null;
-}
-
-function MapController({ center, zoom }) {
-  const map = useMap();
-  
-  useEffect(() => {
-    if (center) {
-      map.setView(center, zoom || map.getZoom(), {
-        animate: true,
-        duration: 1 // 1 second animation
-      });
-    }
-  }, [center, zoom, map]);
-  
-  return null;
-}
 
 function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, placesOfInterest, onRefreshPOI, currentUserRole, onPlaceClick, center: initialCenter, zoom: initialZoom, showVehicles = true }) {
   const [center, setCenter] = useState(initialCenter || [5.8520, -55.2038]);
@@ -296,120 +261,35 @@ return;
 
   return (
     <div className="relative h-full w-full">
-      <MapContainer center={center} zoom={zoom} className="h-full w-full">
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      <MapDisplay
+        center={center}
+        zoom={zoom}
+        pinMode={pinMode}
+        onMapClick={handleMapClick}
+      >
+        {/* Vehicle markers layer */}
+        <VehicleMarkersLayer
+          vehicles={vehicles}
+          selectedVehicle={selectedVehicle}
+          vehicleHistory={vehicleHistory}
+          showVehicles={showVehicles}
         />
-        
-        <MapClickHandler onMapClick={handleMapClick} pinMode={pinMode} />
-        <MapController center={center} zoom={zoom} />
-        
-        {!selectedVehicle && showVehicles && vehicles.map((vehicle, idx) => {
-          if (!vehicle.lastLocation) {
-return null;
-}
-          const color = vehicleColors[idx % vehicleColors.length];
 
-          return (
-            <Marker
-              key={vehicle.id}
-              position={[vehicle.lastLocation.latitude, vehicle.lastLocation.longitude]}
-              icon={createColoredIcon(color)}
-            >
-              <Popup>
-                <div className="text-sm">
-                  <strong>{vehicle.name}</strong><br />
-                  Speed: {vehicle.lastLocation.speed.toFixed(1)} km/h<br />
-                  Time: {new Date(vehicle.lastLocation.timestamp).toLocaleString()}
-                </div>
-              </Popup>
-            </Marker>
-          );
-        })}
+        {/* Saved locations layer */}
+        <SavedLocationsLayer savedLocations={savedLocations} />
 
-        {selectedVehicle && vehicleHistory.length > 0 && (
-          <>
-            <Polyline
-              positions={vehicleHistory.map(loc => [loc.latitude, loc.longitude])}
-              color={vehicleColors[(selectedVehicle.id - 1) % vehicleColors.length]}
-              weight={3}
-              opacity={0.7}
-            />
-            
-            {vehicleHistory.map((loc, idx) => (
-              <CircleMarker
-                key={idx}
-                center={[loc.latitude, loc.longitude]}
-                radius={3}
-                fillColor={vehicleColors[(selectedVehicle.id - 1) % vehicleColors.length]}
-                fillOpacity={0.6}
-                stroke={false}
-              >
-                <Popup>
-                  <div className="text-xs">
-                    Speed: {loc.speed.toFixed(1)} km/h<br />
-                    {new Date(loc.timestamp).toLocaleString()}
-                  </div>
-                </Popup>
-              </CircleMarker>
-            ))}
-            
-            <Marker
-              position={[vehicleHistory[vehicleHistory.length - 1].latitude, vehicleHistory[vehicleHistory.length - 1].longitude]}
-              icon={createColoredIcon(vehicleColors[(selectedVehicle.id - 1) % vehicleColors.length])}
-            >
-              <Popup>
-                <div className="text-sm">
-                  <strong>{selectedVehicle.name}</strong><br />
-                  Current Position
-                </div>
-              </Popup>
-            </Marker>
-          </>
-        )}
+        {/* Points of interest layer */}
+        <PointsOfInterestLayer
+          placesOfInterest={placesOfInterest}
+          onPlaceClick={onPlaceClick}
+        />
 
-        {savedLocations.map(loc => (
-          <Marker
-            key={`saved-${loc.id}`}
-            position={[loc.latitude, loc.longitude]}
-            icon={createSavedLocationIcon()}
-          >
-            <Popup>
-              <div className="text-sm">
-                <strong>📍 {loc.name}</strong><br />
-                {loc.visit_type === 'auto_detected' && (
-                  <>Stop Duration: {loc.stop_duration_minutes} min<br /></>
-                )}
-                Time: {new Date(loc.timestamp).toLocaleString()}<br />
-                {loc.notes && <><em>{loc.notes}</em><br /></>}
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
-        {placesOfInterest && placesOfInterest.map(place => (
-          <Marker
-            key={`poi-${place.id}`}
-            position={[place.latitude, place.longitude]}
-            icon={createPOIIcon()}
-          >
-            <Popup>
-              <div className="text-sm">
-                <strong>📍 {place.name}</strong><br />
-                {place.category && (
-                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">{place.category}</span>
-                )}<br />
-                {place.address && <><em>{place.address}</em><br /></>}
-                {place.description && <>{place.description}<br /></>}
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-
+        {/* Temporary pin shown during POI creation */}
         {tempPin && (
           <Marker position={[tempPin.lat, tempPin.lng]} icon={createPOIIcon()} />
         )}
+
+        {/* Search result marker with save option */}
         {searchMarker && (
           <Marker position={[searchMarker.lat, searchMarker.lng]}>
             <Popup>
@@ -417,7 +297,6 @@ return null;
                 <strong>📍 Search Result</strong><br />
                 {searchMarker.name}
                 <div className="mt-2 pt-2 border-t">
-                  {/* Only show save option to non-viewer roles */}
                   {['admin', 'manager', 'operator'].includes(currentUserRole) ? (
                     <button
                       onClick={handleSaveSearchToPOI}
@@ -433,109 +312,29 @@ return null;
             </Popup>
           </Marker>
         )}
-      </MapContainer>
+      </MapDisplay>
 
       {/* Address Search Bar */}
-      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-[1000] w-96">
-        <div className="bg-white rounded-lg shadow-lg">
-          <div className="flex items-center p-3 border-b">
-            <svg className="w-5 h-5 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => handleSearchInput(e.target.value)}
-              onFocus={() => searchResults.length > 0 && setShowResults(true)}
-              placeholder="Search address..."
-              className="flex-1 outline-none text-sm"
-            />
-            {searchQuery && (
-              <button
-                onClick={handleClearSearch}
-                className="ml-2 text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-            {searchMarker && ['admin', 'manager', 'operator'].includes(currentUserRole) && (
-              <button
-                onClick={handleSaveSearchToPOI}
-                className="ml-2 text-blue-600 hover:text-blue-800 text-xs font-medium"
-                title="Save to Places of Interest"
-              >
-                💾 Save
-              </button>
-            )}
-            {searching && (
-              <div className="ml-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-              </div>
-            )}
-          </div>
-          
-          {showResults && searchResults.length > 0 && (
-            <div className="max-h-80 overflow-y-auto">
-              {searchResults.map((result, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => handleSelectResult(result)}
-                  className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
-                >
-                  <div className="flex items-start">
-                    <svg className="w-4 h-4 text-blue-500 mr-2 mt-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-900">{result.name.split(',')[0]}</div>
-                      <div className="text-xs text-gray-500 mt-1">{result.name}</div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        {result.latitude.toFixed(4)}, {result.longitude.toFixed(4)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          
-          {showResults && searchResults.length === 0 && !searching && searchQuery.length >= 3 && (
-            <div className="p-4 text-center text-sm text-gray-500">
-              No results found for &quot;{searchQuery}&quot;
-            </div>
-          )}
-        </div>
-      </div>
+      <AddressSearchBar
+        searchQuery={searchQuery}
+        searchResults={searchResults}
+        searching={searching}
+        showResults={showResults}
+        searchMarker={searchMarker}
+        currentUserRole={currentUserRole}
+        onSearchInput={handleSearchInput}
+        onClearSearch={handleClearSearch}
+        onSelectResult={handleSelectResult}
+        onSaveSearchToPOI={handleSaveSearchToPOI}
+      />
 
       {/* Pin Location Button */}
-      {['admin', 'manager', 'operator'].includes(currentUserRole) && (
-        <div className="absolute top-4 right-4 z-[1000]">
-          <button
-            onClick={() => setPinMode(!pinMode)}
-            className={`px-4 py-2 rounded-lg shadow-lg font-medium transition-all ${
-              pinMode
-                ? 'bg-pink-500 text-white hover:bg-pink-600'
-                : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            {pinMode ? '📍 Click Map to Pin' : '📍 Pin Location'}
-          </button>
-          {pinMode && (
-            <div className="mt-2 bg-white rounded-lg shadow-lg p-3 text-sm">
-              <p className="text-gray-700">Click anywhere on the map to save a location</p>
-              <button
-                onClick={() => setPinMode(false)}
-                className="mt-2 w-full px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-xs"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      <PinLocationButton
+        pinMode={pinMode}
+        currentUserRole={currentUserRole}
+        onTogglePinMode={() => setPinMode(!pinMode)}
+        onCancel={() => setPinMode(false)}
+      />
     </div>
   );
 }
