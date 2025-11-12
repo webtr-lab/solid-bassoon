@@ -13,6 +13,7 @@ from app.security import (
 from app.routes.health import health_bp
 from app.routes.auth import auth_bp
 from app.routes.locations import locations_bp
+from app.routes.vehicles import vehicles_bp
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import math
@@ -45,6 +46,7 @@ login_manager.login_view = 'login'
 app.register_blueprint(health_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(locations_bp)
+app.register_blueprint(vehicles_bp)
 
 @login_manager.user_loader
 def load_user(user_id):
