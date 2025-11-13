@@ -263,7 +263,7 @@ class TestUserServiceIntegration:
         formatted = format_user(user)
         assert formatted['username'] == 'admin_test'
 
-    def test_user_lifecycle(self, app_context, app_context):
+    def test_user_lifecycle(self, app_context):
         """Test complete user lifecycle"""
         from app.models import db
         from flask_bcrypt import Bcrypt

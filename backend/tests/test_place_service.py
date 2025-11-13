@@ -280,7 +280,7 @@ class TestDeletePlace:
 class TestGetVisitAnalytics:
     """Test get_visit_analytics function"""
 
-    def test_analytics_structure(self, app_context, test_vehicle, test_place_of_interest, app_context):
+    def test_analytics_structure(self, app_context, test_vehicle, test_place_of_interest):
         """Test analytics return structure"""
         from app.models import db
 
@@ -308,7 +308,7 @@ class TestGetVisitAnalytics:
             assert 'vehicles' in item
             assert 'last_visited' in item
 
-    def test_analytics_matches_visits(self, app_context, test_vehicle, test_place_of_interest, app_context):
+    def test_analytics_matches_visits(self, app_context, test_vehicle, test_place_of_interest):
         """Test that analytics correctly matches visits to places"""
         from app.models import db
 
@@ -336,7 +336,7 @@ class TestGetVisitAnalytics:
         analytics = get_visit_analytics([], [test_place_of_interest])
         assert analytics == []
 
-    def test_analytics_sorted_by_visits(self, app_context, test_vehicle, test_places, app_context):
+    def test_analytics_sorted_by_visits(self, app_context, test_vehicle, test_places):
         """Test that analytics are sorted by visit count"""
         from app.models import db
 
@@ -360,7 +360,7 @@ class TestGetVisitAnalytics:
         for i in range(len(analytics) - 1):
             assert analytics[i]['visits'] >= analytics[i+1]['visits']
 
-    def test_analytics_tracks_vehicles(self, app_context, test_vehicle, test_place_of_interest, app_context):
+    def test_analytics_tracks_vehicles(self, app_context, test_vehicle, test_place_of_interest):
         """Test that analytics tracks which vehicles visited"""
         from app.models import db
 

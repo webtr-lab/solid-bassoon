@@ -135,7 +135,7 @@ class TestUpdateVehicle:
         vehicle = update_vehicle(99999, name='New Name')
         assert vehicle is None
 
-    def test_update_vehicle_duplicate_device_id(self, app_context, test_vehicle, app_context):
+    def test_update_vehicle_duplicate_device_id(self, app_context, test_vehicle):
         """Test updating to duplicate device_id"""
         from app.models import db
 
@@ -184,7 +184,7 @@ class TestDeleteVehicle:
 class TestGetVehicleCurrentLocation:
     """Test get_vehicle_current_location function"""
 
-    def test_get_current_location_exists(self, app_context, test_vehicle, app_context):
+    def test_get_current_location_exists(self, app_context, test_vehicle):
         """Test getting current location when it exists"""
         from app.models import db
 
@@ -210,7 +210,7 @@ class TestGetVehicleCurrentLocation:
         current = get_vehicle_current_location(test_vehicle.id)
         assert current is None
 
-    def test_get_current_location_returns_latest(self, app_context, test_vehicle, app_context):
+    def test_get_current_location_returns_latest(self, app_context, test_vehicle):
         """Test that only the latest location is returned"""
         from app.models import db
 
@@ -245,7 +245,7 @@ class TestGetVehicleHistory:
         assert isinstance(history, list)
         assert len(history) > 0
 
-    def test_get_history_with_hours_filter(self, app_context, test_vehicle, app_context):
+    def test_get_history_with_hours_filter(self, app_context, test_vehicle):
         """Test history with hour filter"""
         from app.models import db
 
@@ -316,7 +316,7 @@ class TestGetVehicleStats:
         assert stats['max_speed'] == 0
         assert stats['distance_km'] == 0
 
-    def test_get_stats_with_hour_filter(self, app_context, test_vehicle, app_context):
+    def test_get_stats_with_hour_filter(self, app_context, test_vehicle):
         """Test stats with hour filter"""
         from app.models import db
 
@@ -366,7 +366,7 @@ class TestExportVehicleData:
         assert 'text/csv' in headers['Content-Type']
         assert 'Timestamp,Latitude,Longitude,Speed' in data
 
-    def test_export_with_hours_filter(self, app_context, test_vehicle, app_context):
+    def test_export_with_hours_filter(self, app_context, test_vehicle):
         """Test export with hour filter"""
         from app.models import db
 
