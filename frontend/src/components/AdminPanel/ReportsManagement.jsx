@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import logger from '../../utils/logger';
+import { apiFetch, getErrorMessage } from '../../utils/apiClient';
 
 function ReportsManagement() {
   const [start, setStart] = useState('');
@@ -16,17 +17,11 @@ function ReportsManagement() {
       if (start) params.set('start', start);
       if (end) params.set('end', end);
       if (areaFilter) params.set('area', areaFilter);
-      const response = await fetch(`/api/reports/visits?${params.toString()}`, { credentials: 'include' });
-      if (!response.ok) {
-        const data = await response.json();
-        alert(data.error || 'Failed to fetch report');
-      } else {
-        const data = await response.json();
-        setResults(data.results || []);
-      }
+      const data = await apiFetch(`/api/reports/visits?${params.toString()}`);
+      setResults(data.results || []);
     } catch (err) {
       logger.error('Error fetching reports', err);
-      alert('Error fetching reports');
+      alert(getErrorMessage(err, 'Failed to fetch report'));
     } finally {
       setLoading(false);
     }

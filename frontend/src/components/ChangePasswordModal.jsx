@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import logger from '../utils/logger';
+import { apiFetch, getErrorMessage } from '../utils/apiClient';
 
 function ChangePasswordModal({ onPasswordChanged, onCancel, canCancel = false }) {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -26,27 +27,17 @@ function ChangePasswordModal({ onPasswordChanged, onCancel, canCancel = false })
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/change-password', {
+      await apiFetch('/api/auth/change-password', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           current_password: currentPassword,
           new_password: newPassword
         })
       });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        onPasswordChanged();
-      } else {
-        setError(data.error || 'Failed to change password');
-      }
+      onPasswordChanged();
     } catch (error) {
-      setError('Network error. Please try again.');
+      setError(getErrorMessage(error, 'Failed to change password'));
       logger.error('Change password error', error);
     } finally {
       setLoading(false);

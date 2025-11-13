@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import logger from '../utils/logger';
+import { apiFetch, getErrorMessage } from '../utils/apiClient';
 
 function VehicleStats({ vehicleId, historyHours }) {
   const [stats, setStats] = useState(null);
@@ -12,10 +13,7 @@ function VehicleStats({ vehicleId, historyHours }) {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/stats?hours=${historyHours}`, {
-        credentials: 'include'
-      });
-      const data = await response.json();
+      const data = await apiFetch(`/api/vehicles/${vehicleId}/stats?hours=${historyHours}`);
       setStats(data);
     } catch (error) {
       logger.error('Error fetching stats', error);
@@ -27,6 +25,11 @@ function VehicleStats({ vehicleId, historyHours }) {
       const response = await fetch(`/api/vehicles/${vehicleId}/export?format=${format}&hours=${historyHours}`, {
         credentials: 'include'
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -38,6 +41,7 @@ function VehicleStats({ vehicleId, historyHours }) {
       document.body.removeChild(a);
     } catch (error) {
       logger.error('Error exporting data', error);
+      alert(getErrorMessage(error, 'Failed to export data'));
     }
   };
 

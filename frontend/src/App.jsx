@@ -6,9 +6,11 @@ import Login from './components/Login';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import ErrorAlert from './components/ErrorAlert';
 import ErrorBoundary from './components/ErrorBoundary';
-import { apiFetch, getErrorMessage, isAuthError } from './utils/apiClient';
-import logger from './utils/logger';
-import { MAP_CONFIG, REFRESH_INTERVALS, ADMIN_ROLES, HISTORY_WINDOWS } from './constants';
+import { useAuth } from './hooks/useAuth';
+import { useFetchVehicles } from './hooks/useFetchVehicles';
+import { useVehicleDetails } from './hooks/useVehicleDetails';
+import { useFetchPlaces } from './hooks/useFetchPlaces';
+import { MAP_CONFIG, ADMIN_ROLES } from './constants';
 
 // Role permissions checker
 const canAccessAdmin = (userRole) => {
@@ -16,163 +18,26 @@ const canAccessAdmin = (userRole) => {
 };
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // Authentication
+  const { isAuthenticated, currentUser, loading, error: authError, handleLoginSuccess, handlePasswordChanged, handleLogout, setError: setAuthError } = useAuth();
+
+  // View state
   const [activeView, setActiveView] = useState('tracking');
-  const [vehicles, setVehicles] = useState([]);
-  const [selectedVehicle, setSelectedVehicle] = useState(null);
-  const [vehicleHistory, setVehicleHistory] = useState([]);
-  const [savedLocations, setSavedLocations] = useState([]);
-  const [placesOfInterest, setPlacesOfInterest] = useState([]);
+
+  // Map state
   const [mapCenter, setMapCenter] = useState(MAP_CONFIG.DEFAULT_CENTER);
   const [mapZoom, setMapZoom] = useState(MAP_CONFIG.DEFAULT_ZOOM);
   const [historyHours, setHistoryHours] = useState(24);
   const [showVehiclesOnMap, setShowVehiclesOnMap] = useState(true);
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
+  // Data fetching hooks
+  const { vehicles, error: vehiclesError, setError: setVehiclesError, fetchVehicles } = useFetchVehicles(isAuthenticated, activeView);
+  const { selectedVehicle, vehicleHistory, savedLocations, setSelectedVehicle, fetchSavedLocations } = useVehicleDetails(isAuthenticated, historyHours);
+  const { placesOfInterest, fetchPlacesOfInterest } = useFetchPlaces(isAuthenticated, activeView);
 
-  const checkAuth = async () => {
-    try {
-      const data = await apiFetch('/api/auth/check');
-
-      if (data.authenticated) {
-        setIsAuthenticated(true);
-        setCurrentUser(data.user);
-        setError(null);
-      }
-    } catch (err) {
-      logger.error('Auth check error', err);
-      // Don't show error for auth check - just leave user logged out
-      setIsAuthenticated(false);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLoginSuccess = (user) => {
-    setIsAuthenticated(true);
-    setCurrentUser(user);
-  };
-
-  const handlePasswordChanged = async () => {
-    // Re-check auth to get updated user info
-    await checkAuth();
-  };
-
-  const handleLogout = async () => {
-    try {
-      await apiFetch('/api/auth/logout', { method: 'POST' });
-      setIsAuthenticated(false);
-      setCurrentUser(null);
-      setVehicles([]);
-      setSelectedVehicle(null);
-      setActiveView('tracking');
-      setError(null);
-    } catch (err) {
-      const errorMsg = getErrorMessage(err, 'Logout failed');
-      setError(errorMsg);
-      logger.error('Logout error', err);
-    }
-  };
-
-  const fetchVehicles = async () => {
-    try {
-      const vehiclesData = await apiFetch('/api/vehicles');
-
-      const vehiclesWithLocations = await Promise.all(
-        vehiclesData.data.map(async (vehicle) => {
-          try {
-            const location = await apiFetch(`/api/vehicles/${vehicle.id}/location`);
-            return { ...vehicle, lastLocation: location };
-          } catch (err) {
-            // Vehicle may not have a location yet, that's okay
-            logger.debug(`No location for vehicle ${vehicle.id}`);
-            return vehicle;
-          }
-        })
-      );
-
-      setVehicles(vehiclesWithLocations);
-      setError(null);
-    } catch (err) {
-      const errorMsg = getErrorMessage(err, 'Failed to load vehicles');
-      setError(errorMsg);
-      logger.error('Error fetching vehicles', err);
-      // If auth error, re-check auth
-      if (isAuthError(err)) {
-        checkAuth();
-      }
-    }
-  };
-
-  const fetchVehicleHistory = async (vehicleId) => {
-    try {
-      const data = await apiFetch(`/api/vehicles/${vehicleId}/history?hours=${historyHours}`);
-      setVehicleHistory(data);
-      setError(null);
-    } catch (err) {
-      logger.error('Error fetching history', err);
-      setVehicleHistory([]);
-      // Don't show error for non-critical data loading
-    }
-  };
-
-  const fetchSavedLocations = async (vehicleId) => {
-    try {
-      const data = await apiFetch(`/api/vehicles/${vehicleId}/saved-locations`);
-      setSavedLocations(data);
-      setError(null);
-    } catch (err) {
-      logger.error('Error fetching saved locations', err);
-      setSavedLocations([]);
-      // Don't show error for non-critical data loading
-    }
-  };
-
-  const fetchPlacesOfInterest = async () => {
-    try {
-      const data = await apiFetch('/api/places-of-interest');
-      setPlacesOfInterest(data.data);
-      setError(null);
-    } catch (err) {
-      logger.error('Error fetching places of interest', err);
-      setPlacesOfInterest([]);
-      // Don't show error for non-critical data loading
-    }
-  };
-
-  useEffect(() => {
-    if (isAuthenticated && activeView === 'tracking') {
-      fetchVehicles();
-      fetchPlacesOfInterest();
-      const interval = setInterval(() => {
-        fetchVehicles();
-        fetchPlacesOfInterest();
-      }, REFRESH_INTERVALS.VEHICLES);
-      return () => clearInterval(interval);
-    }
-  }, [isAuthenticated, activeView]);
-
-  useEffect(() => {
-    if (selectedVehicle && isAuthenticated) {
-      fetchVehicleHistory(selectedVehicle.id);
-      fetchSavedLocations(selectedVehicle.id);
-
-      const interval = setInterval(() => {
-        fetchVehicleHistory(selectedVehicle.id);
-        fetchSavedLocations(selectedVehicle.id);
-      }, REFRESH_INTERVALS.HISTORY);
-
-      return () => clearInterval(interval);
-    } else {
-      setVehicleHistory([]);
-      setSavedLocations([]);
-    }
-  }, [selectedVehicle, historyHours, isAuthenticated]);
+  // Combine errors
+  const error = authError || vehiclesError;
+  const setError = authError ? setAuthError : setVehiclesError;
 
   const handleSelectVehicle = (vehicle) => {
     setSelectedVehicle(vehicle);

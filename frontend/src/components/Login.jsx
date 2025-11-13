@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import logger from '../utils/logger';
+import { apiFetch, getErrorMessage } from '../utils/apiClient';
 
 function Login({ onLoginSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -20,30 +21,21 @@ function Login({ onLoginSuccess }) {
       : { username, email, password };
 
     try {
-      const response = await fetch(endpoint, {
+      const data = await apiFetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        if (isLogin) {
-          onLoginSuccess(data.user);
-        } else {
-          setError('Registration successful! Please login.');
-          setIsLogin(true);
-          setPassword('');
-        }
+      if (isLogin) {
+        onLoginSuccess(data.user);
       } else {
-        setError(data.error || 'An error occurred');
+        setError('Registration successful! Please login.');
+        setIsLogin(true);
+        setPassword('');
       }
     } catch (error) {
-      setError('Network error. Please try again.');
+      setError(getErrorMessage(error, 'An error occurred'));
       logger.error('Login/Registration error', error);
     } finally {
       setLoading(false);

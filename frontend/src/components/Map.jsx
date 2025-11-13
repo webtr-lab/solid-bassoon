@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import PropTypes from 'prop-types';
 import { Marker, Popup } from 'react-leaflet';
 import logger from '../utils/logger';
+import { apiFetch, getErrorMessage } from '../utils/apiClient';
 import { createColoredIcon, createSavedLocationIcon, createPOIIcon, vehicleColors } from '../utils/markerIcons';
 import MapDisplay from './Map/MapDisplay';
 import VehicleMarkersLayer from './Map/VehicleMarkersLayer';
@@ -81,10 +82,9 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
 
   const savePlace = async (name, latlng, address, area, contact, telephone, category, description) => {
     try {
-      const response = await fetch('/api/places-of-interest', {
+      await apiFetch('/api/places-of-interest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           name: name,
           address: address || '',
@@ -97,19 +97,14 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
           description: description || ''
         })
       });
-
-      if (response.ok) {
-        alert('Location saved successfully!');
-        setPinMode(false);
-        if (onRefreshPOI) {
-          onRefreshPOI();
-        }
-      } else {
-        alert('Failed to save location');
+      alert('Location saved successfully!');
+      setPinMode(false);
+      if (onRefreshPOI) {
+        onRefreshPOI();
       }
     } catch (error) {
       logger.error('Error saving location', error);
-      alert('Error saving location');
+      alert(getErrorMessage(error, 'Error saving location'));
     }
   };
 
@@ -153,10 +148,7 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
     }
 
     try {
-      const response = await fetch(`/api/geocode?address=${encodeURIComponent(query)}`, {
-        credentials: 'include'
-      });
-      const data = await response.json();
+      const data = await apiFetch(`/api/geocode?address=${encodeURIComponent(query)}`);
 
       // Store in cache
       searchCacheRef.current[cacheKey] = data;
@@ -218,10 +210,9 @@ return;
     const description = prompt('Add description/notes (optional):', '');
 
     try {
-      const response = await fetch('/api/places-of-interest', {
+      await apiFetch('/api/places-of-interest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           name: locationName,
           address: address || '',
@@ -234,21 +225,15 @@ return;
           description: description || ''
         })
       });
-
-      if (response.ok) {
-        alert('Place saved successfully!');
-        setSearchMarker(null);
-        setSearchQuery('');
-        if (onRefreshPOI) {
-          onRefreshPOI();
-        }
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Failed to save place');
+      alert('Place saved successfully!');
+      setSearchMarker(null);
+      setSearchQuery('');
+      if (onRefreshPOI) {
+        onRefreshPOI();
       }
     } catch (error) {
       logger.error('Error saving place', error);
-      alert('Error saving place');
+      alert(getErrorMessage(error, 'Error saving place'));
     }
   };
 

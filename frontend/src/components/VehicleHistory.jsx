@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import logger from '../utils/logger';
+import { apiFetch, getErrorMessage } from '../utils/apiClient';
 
 function VehicleHistory({ savedLocations, onRefresh, vehicleId }) {
   const [editingId, setEditingId] = useState(null);
@@ -14,24 +15,19 @@ function VehicleHistory({ savedLocations, onRefresh, vehicleId }) {
 
   const handleSave = async (locationId) => {
     try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/saved-locations/${locationId}`, {
+      await apiFetch(`/api/vehicles/${vehicleId}/saved-locations/${locationId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: editName,
           notes: editNotes
         })
       });
-
-      if (response.ok) {
-        setEditingId(null);
-        onRefresh();
-      }
+      setEditingId(null);
+      onRefresh();
     } catch (error) {
       logger.error('Error updating location', error);
+      alert(getErrorMessage(error, 'Failed to update location'));
     }
   };
 
@@ -41,16 +37,13 @@ function VehicleHistory({ savedLocations, onRefresh, vehicleId }) {
     }
 
     try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/saved-locations/${locationId}`, {
-        method: 'DELETE',
-        credentials: 'include'
+      await apiFetch(`/api/vehicles/${vehicleId}/saved-locations/${locationId}`, {
+        method: 'DELETE'
       });
-
-      if (response.ok) {
-        onRefresh();
-      }
+      onRefresh();
     } catch (error) {
       logger.error('Error deleting location', error);
+      alert(getErrorMessage(error, 'Failed to delete location'));
     }
   };
 
