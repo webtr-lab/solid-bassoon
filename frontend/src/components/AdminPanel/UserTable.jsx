@@ -76,4 +76,4 @@ UserTable.propTypes = {
   onDelete: PropTypes.func.isRequired,
 };
 
-export default UserTable;
+export default React.memo(UserTable);

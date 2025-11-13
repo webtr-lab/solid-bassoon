@@ -48,4 +48,4 @@ VehicleStatusFilter.propTypes = {
   vehicles: PropTypes.array.isRequired,
 };
 
-export default VehicleStatusFilter;
+export default React.memo(VehicleStatusFilter);

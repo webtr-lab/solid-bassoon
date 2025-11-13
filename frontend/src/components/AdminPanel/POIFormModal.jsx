@@ -85,4 +85,4 @@ POIFormModal.propTypes = {
   loading: PropTypes.bool,
 };
 
-export default POIFormModal;
+export default React.memo(POIFormModal);

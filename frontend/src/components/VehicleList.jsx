@@ -71,4 +71,4 @@ function VehicleList({ vehicles, selectedVehicle, onSelectVehicle, collapsed = f
   );
 }
 
-export default VehicleList;
+export default React.memo(VehicleList);

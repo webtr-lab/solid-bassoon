@@ -95,4 +95,4 @@ function VehicleStats({ vehicleId, historyHours }) {
   );
 }
 
-export default VehicleStats;
+export default React.memo(VehicleStats);

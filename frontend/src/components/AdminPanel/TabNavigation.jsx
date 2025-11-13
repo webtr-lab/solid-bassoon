@@ -42,4 +42,4 @@ TabNavigation.propTypes = {
   currentUserRole: PropTypes.oneOf(['admin', 'manager', 'viewer']).isRequired,
 };
 
-export default TabNavigation;
+export default React.memo(TabNavigation);

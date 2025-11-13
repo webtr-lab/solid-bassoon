@@ -49,4 +49,4 @@ function PlacesList({ places, onPlaceClick }) {
   );
 }
 
-export default PlacesList;
+export default React.memo(PlacesList);

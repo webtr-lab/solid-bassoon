@@ -41,4 +41,4 @@ POISearchFilter.propTypes = {
   setAreaFilter: PropTypes.func.isRequired,
 };
 
-export default POISearchFilter;
+export default React.memo(POISearchFilter);

@@ -122,4 +122,4 @@ UserFormModal.propTypes = {
   loading: PropTypes.bool,
 };
 
-export default UserFormModal;
+export default React.memo(UserFormModal);

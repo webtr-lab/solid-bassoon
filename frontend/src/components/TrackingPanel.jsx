@@ -89,4 +89,4 @@ TrackingPanel.defaultProps = {
   selectedVehicle: null,
 };
 
-export default TrackingPanel;
+export default React.memo(TrackingPanel);

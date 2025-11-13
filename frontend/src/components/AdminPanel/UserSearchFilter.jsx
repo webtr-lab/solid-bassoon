@@ -89,4 +89,4 @@ UserSearchFilter.propTypes = {
   onClearFilters: PropTypes.func.isRequired,
 };
 
-export default UserSearchFilter;
+export default React.memo(UserSearchFilter);

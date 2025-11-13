@@ -49,4 +49,4 @@ POITable.propTypes = {
   onDelete: PropTypes.func.isRequired,
 };
 
-export default POITable;
+export default React.memo(POITable);

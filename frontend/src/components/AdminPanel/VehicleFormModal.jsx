@@ -94,4 +94,4 @@ VehicleFormModal.propTypes = {
   loading: PropTypes.bool,
 };
 
-export default VehicleFormModal;
+export default React.memo(VehicleFormModal);

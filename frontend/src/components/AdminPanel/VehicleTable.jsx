@@ -63,4 +63,4 @@ VehicleTable.propTypes = {
   onDelete: PropTypes.func.isRequired,
 };
 
-export default VehicleTable;
+export default React.memo(VehicleTable);

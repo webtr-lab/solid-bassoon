@@ -157,4 +157,4 @@ function VehicleHistory({ savedLocations, onRefresh, vehicleId }) {
   );
 }
 
-export default VehicleHistory;
+export default React.memo(VehicleHistory);
