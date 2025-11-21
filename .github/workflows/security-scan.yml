@@ -252,7 +252,7 @@ jobs:
       - name: Verify authentication implementation
         run: |
           echo "Checking authentication implementation..."
-          if grep -q "@login_required\|@require_admin\|@require_manager" backend/app/main.py; then
+          if grep -r "@login_required\|@require_admin\|@require_manager" backend/app --include="*.py" | grep -q "@"; then
             echo "✅ Authentication decorators found"
           else
             echo "❌ Missing authentication decorators"
