@@ -9,6 +9,7 @@ import subprocess
 import glob
 import json
 import hashlib
+import tempfile
 from datetime import datetime
 from flask import current_app
 from app.models import db
@@ -181,12 +182,78 @@ def create_backup(backup_name=None):
         raise
 
 
+def decrypt_backup(encrypted_backup_path):
+    """
+    Decrypt GPG-encrypted backup file
+
+    Args:
+        encrypted_backup_path: Path to encrypted .gpg backup file
+
+    Returns:
+        Path to decrypted temporary file (caller must delete)
+
+    Raises:
+        Exception: If decryption fails or passphrase not set
+    """
+    try:
+        # Get encryption passphrase from environment
+        encryption_passphrase = os.environ.get('BACKUP_ENCRYPTION_PASSPHRASE', '')
+
+        if not encryption_passphrase:
+            raise Exception("Backup encryption passphrase not configured (BACKUP_ENCRYPTION_PASSPHRASE)")
+
+        # Check if GPG is available
+        if subprocess.run(['which', 'gpg'], capture_output=True).returncode != 0:
+            raise Exception("GPG is not installed or not in PATH")
+
+        # Create temporary file for decrypted backup
+        temp_fd, temp_path = tempfile.mkstemp(suffix='.sql', prefix='backup_decrypted_')
+        os.close(temp_fd)
+
+        current_app.logger.info(f"Decrypting backup file: {encrypted_backup_path}")
+
+        # Decrypt using GPG
+        cmd = [
+            'gpg',
+            '--quiet',
+            '--batch',
+            '--passphrase-fd', '0',
+            '--output', temp_path,
+            encrypted_backup_path
+        ]
+
+        # Pass passphrase via stdin
+        result = subprocess.run(
+            cmd,
+            input=encryption_passphrase.encode(),
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            os.unlink(temp_path)
+            current_app.logger.error(f"GPG decryption failed: {result.stderr}")
+            raise Exception(f"Failed to decrypt backup: {result.stderr}")
+
+        # Verify decrypted file exists and has content
+        if not os.path.exists(temp_path) or os.path.getsize(temp_path) == 0:
+            os.unlink(temp_path)
+            raise Exception("Decryption resulted in empty file")
+
+        current_app.logger.info(f"✓ Backup decrypted successfully to temporary file")
+        return temp_path
+
+    except Exception as e:
+        current_app.logger.error(f"Decryption error: {str(e)}")
+        raise
+
+
 def restore_backup(backup_filename):
     """
     Restore database from backup using pg_restore
 
     Args:
-        backup_filename: Name of backup file to restore from
+        backup_filename: Name of backup file to restore from (can be .gpg encrypted)
 
     Returns:
         True if restore succeeded
@@ -199,6 +266,15 @@ def restore_backup(backup_filename):
 
         if not os.path.exists(backup_path):
             raise Exception(f"Backup file not found: {backup_filename}")
+
+        # Check if backup is encrypted (ends with .gpg)
+        temp_decrypted_path = None
+        restore_path = backup_path
+
+        if backup_filename.endswith('.gpg'):
+            current_app.logger.info("Encrypted backup detected - decrypting...")
+            temp_decrypted_path = decrypt_backup(backup_path)
+            restore_path = temp_decrypted_path
 
         # Get database connection details
         db_params = _get_db_connection_params()
@@ -216,38 +292,49 @@ def restore_backup(backup_filename):
 
         current_app.logger.info(f"Starting restore from {backup_filename}...")
 
-        # Run pg_restore with clean option and verbose output
-        cmd = [
-            'pg_restore',
-            '-h', db_params['hostname'],
-            '-p', str(db_params['port']),
-            '-U', db_params['username'],
-            '-d', db_params['dbname'],
-            '-c',  # Clean (drop) database objects before recreating
-            '--if-exists',  # Don't error if objects don't exist
-            '-v',  # Verbose mode
-            backup_path
-        ]
+        try:
+            # Run pg_restore with clean option and verbose output
+            cmd = [
+                'pg_restore',
+                '-h', db_params['hostname'],
+                '-p', str(db_params['port']),
+                '-U', db_params['username'],
+                '-d', db_params['dbname'],
+                '-c',  # Clean (drop) database objects before recreating
+                '--if-exists',  # Don't error if objects don't exist
+                '-v',  # Verbose mode
+                restore_path
+            ]
 
-        result = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
+            result = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
 
-        # Log output for debugging
-        if result.stdout:
-            current_app.logger.info(f"pg_restore output: {result.stdout[:500]}")
-        if result.stderr:
-            # pg_restore outputs warnings to stderr even on success
-            current_app.logger.info(f"pg_restore stderr: {result.stderr[:500]}")
+            # Log output for debugging
+            if result.stdout:
+                current_app.logger.info(f"pg_restore output: {result.stdout[:500]}")
+            if result.stderr:
+                # pg_restore outputs warnings to stderr even on success
+                current_app.logger.info(f"pg_restore stderr: {result.stderr[:500]}")
 
-        # Check for actual errors (not warnings)
-        if result.returncode != 0:
-            # pg_restore may return 1 for warnings, check for actual ERRORs
-            if 'FATAL' in result.stderr or 'could not connect' in result.stderr.lower():
-                raise Exception(f"pg_restore failed with critical error: {result.stderr}")
-            else:
-                current_app.logger.warning(f"pg_restore completed with warnings (return code {result.returncode})")
+            # Check for actual errors (not warnings)
+            if result.returncode != 0:
+                # pg_restore may return 1 for warnings, check for actual ERRORs
+                if 'FATAL' in result.stderr or 'could not connect' in result.stderr.lower():
+                    raise Exception(f"pg_restore failed with critical error: {result.stderr}")
+                else:
+                    current_app.logger.warning(f"pg_restore completed with warnings (return code {result.returncode})")
 
-        current_app.logger.info("Restore completed successfully")
-        return True
+            current_app.logger.info("Restore completed successfully")
+            return True
+
+        finally:
+            # Clean up temporary decrypted file if it exists
+            if temp_decrypted_path and os.path.exists(temp_decrypted_path):
+                try:
+                    os.unlink(temp_decrypted_path)
+                    current_app.logger.info("Cleaned up temporary decrypted backup file")
+                except Exception as e:
+                    current_app.logger.warning(f"Could not clean up temporary file: {e}")
+
     except subprocess.TimeoutExpired:
         current_app.logger.error("Restore operation timed out after 300 seconds")
         raise Exception("Restore operation timed out. The backup file may be too large.")

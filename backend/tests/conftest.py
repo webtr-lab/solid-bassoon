@@ -3,6 +3,10 @@ Pytest configuration and fixtures for backend tests
 Provides comprehensive test fixtures for all models and authentication scenarios
 """
 import os
+# Set test database URL before importing the app to ensure proper initialization
+os.environ.setdefault('DATABASE_URL', 'sqlite:///:memory:')
+os.environ.setdefault('SECRET_KEY', 'test-secret-key-for-pytest')
+
 import pytest
 from datetime import datetime, timedelta
 from app.main import app, db

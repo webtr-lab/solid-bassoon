@@ -2,9 +2,14 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_bcrypt import Bcrypt
+from flask_migrate import Migrate
+from flask_socketio import SocketIO
 from app.config import Config
 from app.models import db, Vehicle, Location, SavedLocation, User, PlaceOfInterest
+from app.limiter import limiter
 from app.logging_config import setup_logging
+from app.sentry_config import init_sentry
+from app.websocket_events import register_websocket_events
 from app.security import (
     validate_gps_coordinates, ValidationError, require_admin, require_manager_or_admin,
     login_rate_limiter, validate_email, validate_password_strength, PaginationParams,
@@ -31,6 +36,9 @@ import tempfile
 app = Flask(__name__)
 app.config.from_object(Config)
 
+# Initialize error monitoring
+init_sentry(app)
+
 # Initialize logging system
 access_logger = setup_logging(app)
 
@@ -44,9 +52,23 @@ CORS(app,
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 
 db.init_app(app)
+migrate = Migrate(app, db)
 bcrypt = Bcrypt(app)
+limiter.init_app(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
+
+# Initialize WebSocket support
+socketio = SocketIO(
+    app,
+    cors_allowed_origins=cors_origins,
+    async_mode='threading',
+    ping_timeout=60,
+    ping_interval=25,
+    logger=False,
+    engineio_logger=False
+)
+register_websocket_events(socketio)
 
 # Register blueprints
 app.register_blueprint(health_bp)

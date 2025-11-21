@@ -11,6 +11,7 @@ from app.security import (
     ValidationError, validate_email, validate_password_strength,
     login_rate_limiter, log_audit_event
 )
+from app.limiter import limiter
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
@@ -28,6 +29,7 @@ def health():
 
 
 @auth_bp.route('/register', methods=['POST'])
+@limiter.limit("5 per hour")
 def register():
     """Register a new user"""
     try:
@@ -81,6 +83,7 @@ def register():
 
 
 @auth_bp.route('/login', methods=['POST'])
+@limiter.limit("10 per minute")
 def login():
     """Authenticate user and create session"""
     try:

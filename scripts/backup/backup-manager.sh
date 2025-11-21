@@ -59,6 +59,10 @@ EMAIL_ENABLED="${BACKUP_EMAIL_ENABLED:-true}"
 EMAIL_RECIPIENT="${BACKUP_EMAIL:-admin@example.com}"
 EMAIL_SUBJECT_PREFIX="[Maps Tracker Backup]"
 
+# Encryption settings
+ENCRYPTION_ENABLED="${BACKUP_ENCRYPTION_ENABLED:-true}"
+ENCRYPTION_PASSPHRASE="${BACKUP_ENCRYPTION_PASSPHRASE:-}"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -107,6 +111,23 @@ init_backup_structure() {
     log_info "Backup structure initialized"
 }
 
+# Get file size in bytes (compatible with macOS and Linux)
+get_file_size() {
+    local file=$1
+    if command -v stat &> /dev/null; then
+        if stat --version &> /dev/null 2>&1; then
+            # GNU stat (Linux)
+            stat -c%s "${file}" 2>/dev/null
+        else
+            # BSD stat (macOS)
+            stat -f%z "${file}" 2>/dev/null
+        fi
+    else
+        # Fallback: use wc
+        wc -c < "${file}" 2>/dev/null
+    fi
+}
+
 # Get current date parts
 get_date_path() {
     local timestamp=$1
@@ -116,13 +137,134 @@ get_date_path() {
     echo "${year}/${month}/${day}"
 }
 
+# Backup configuration files (.env, SSL certs)
+backup_configuration_files() {
+    log_info "Creating configuration backup..."
+
+    # Create config backup directory
+    local config_backup_dir="${BACKUP_ROOT}/config-backups"
+    mkdir -p "${config_backup_dir}"
+
+    # Determine if this is full or daily backup (for organization)
+    local backup_type=$1
+    local timestamp=$(date +%s)
+    local date_path=$(get_date_path ${timestamp})
+    local config_date_dir="${config_backup_dir}/${date_path}"
+    mkdir -p "${config_date_dir}"
+
+    local config_filename="config_$(date '+%Y%m%d_%H%M%S').tar.gz"
+    local config_backup_path="${config_date_dir}/${config_filename}"
+
+    # Create temporary file for tar
+    local temp_tar=$(mktemp)
+
+    # Tar configuration files
+    # We need to be careful to exclude sensitive data and only include what's needed
+    tar czf "${temp_tar}" \
+        --exclude=.git \
+        --exclude=.env.example \
+        --exclude='node_modules' \
+        --exclude='__pycache__' \
+        -C "${BASE_DIR}" \
+        .env \
+        ./ssl/ 2>/dev/null || {
+        log_warn "Some configuration files not found - this may be okay"
+    }
+
+    # Check if tar file was created and has content
+    if [ -f "${temp_tar}" ] && [ -s "${temp_tar}" ]; then
+        mv "${temp_tar}" "${config_backup_path}"
+        log_info "✓ Configuration backup created: ${config_backup_path}"
+
+        # Create checksum
+        sha256sum "${config_backup_path}" > "${config_backup_path}.sha256"
+
+        # Log details
+        local config_size=$(get_file_size "${config_backup_path}")
+        local size_human=$(numfmt --to=iec-i --suffix=B ${config_size} 2>/dev/null || echo "${config_size} bytes")
+        log_info "Config backup size: ${size_human}"
+
+        return 0
+    else
+        log_warn "Configuration backup is empty - no configuration files to backup"
+        rm -f "${temp_tar}"
+        return 0
+    fi
+}
+
+# Encrypt backup file using GPG with AES-256
+encrypt_backup() {
+    local backup_file=$1
+
+    # Check if encryption is disabled
+    if [ "$ENCRYPTION_ENABLED" != "true" ]; then
+        log_info "Encryption disabled - skipping encryption"
+        return 0
+    fi
+
+    # Check if passphrase is set
+    if [ -z "$ENCRYPTION_PASSPHRASE" ]; then
+        log_warn "Encryption enabled but BACKUP_ENCRYPTION_PASSPHRASE not set - skipping encryption"
+        return 0
+    fi
+
+    # Check if GPG is available
+    if ! command -v gpg &> /dev/null; then
+        log_warn "GPG not available - backup will not be encrypted"
+        return 0
+    fi
+
+    log_info "Encrypting backup with AES-256..."
+
+    # Create encrypted version
+    local encrypted_file="${backup_file}.gpg"
+
+    # Use GPG with symmetric encryption (AES-256)
+    # --symmetric: symmetric encryption
+    # --cipher-algo AES256: use AES-256 algorithm
+    # --batch --passphrase: non-interactive mode with passphrase
+    # --output: specify output file
+    if echo "$ENCRYPTION_PASSPHRASE" | gpg --symmetric --cipher-algo AES256 \
+        --batch --passphrase-fd 0 \
+        --output "${encrypted_file}" \
+        "${backup_file}" 2>&1 | tee -a "${BACKUP_LOG}"; then
+
+        # Verify encryption succeeded by checking file exists and has content
+        if [ -f "${encrypted_file}" ] && [ -s "${encrypted_file}" ]; then
+            local encrypted_size=$(get_file_size "${encrypted_file}")
+            local original_size=$(get_file_size "${backup_file}")
+
+            log_info "✓ Encryption successful"
+            log_info "  Original size: $(numfmt --to=iec-i --suffix=B ${original_size} 2>/dev/null || echo "${original_size} bytes")"
+            log_info "  Encrypted size: $(numfmt --to=iec-i --suffix=B ${encrypted_size} 2>/dev/null || echo "${encrypted_size} bytes")"
+
+            # Remove unencrypted backup file
+            log_info "Removing unencrypted backup file..."
+            rm -f "${backup_file}"
+
+            # Update file path to encrypted version
+            mv "${encrypted_file}" "${backup_file}.gpg"
+            log_info "Encrypted backup stored as: ${backup_file}.gpg"
+
+            return 0
+        else
+            log_error "✗ Encryption failed - no encrypted file created"
+            rm -f "${encrypted_file}"
+            return 1
+        fi
+    else
+        log_error "✗ GPG encryption failed"
+        return 1
+    fi
+}
+
 # Create metadata JSON for backup
 create_metadata() {
     local backup_file=$1
     local backup_type=$2
     local metadata_file="${backup_file}.metadata.json"
 
-    local file_size=$(stat -c%s "${backup_file}" 2>/dev/null || stat -f%z "${backup_file}")
+    local file_size=$(get_file_size "${backup_file}")
     local checksum=$(sha256sum "${backup_file}" | awk '{print $1}')
     local timestamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
@@ -157,6 +299,7 @@ create_metadata() {
     TABLE_COUNT="${table_count}" \
     DATABASE="${DB_NAME}" \
     POSTGRES_VERSION="${pg_version}" \
+    ENCRYPTION_ENABLED="${ENCRYPTION_ENABLED}" \
     METADATA_FILE="${metadata_file}" \
     python3 <<'PYEOF'
 import json
@@ -173,6 +316,7 @@ metadata = {
     "database": os.environ.get('DATABASE', ''),
     "postgres_version": os.environ.get('POSTGRES_VERSION', 'unknown'),
     "compressed": False,
+    "encrypted": os.environ.get('ENCRYPTION_ENABLED', '') == 'true',
     "verified": False
 }
 
@@ -331,15 +475,32 @@ create_full_backup() {
         return 1
     fi
 
-    # Create checksum (SHA256 - stronger than MD5)
+    # Backup configuration files (.env, SSL certs, etc.)
+    backup_configuration_files "full"
+
+    # Encrypt backup if enabled
+    ENCRYPTED_FILE="${backup_path}"
+    if [ "$ENCRYPTION_ENABLED" == "true" ] && [ -n "$ENCRYPTION_PASSPHRASE" ]; then
+        encrypt_backup "${backup_path}"
+        if [ $? -eq 0 ] && [ -f "${backup_path}.gpg" ]; then
+            # Update to point to encrypted file only if it exists
+            ENCRYPTED_FILE="${backup_path}.gpg"
+            log_info "Using encrypted backup file: ${ENCRYPTED_FILE}"
+        else
+            # Encryption failed or skipped, use unencrypted file
+            log_warn "Encryption not available, using unencrypted backup"
+        fi
+    fi
+
+    # Create checksum (SHA256 - stronger than MD5) - on final file (encrypted or not)
     log_info "Generating SHA256 checksum..."
-    sha256sum "${backup_path}" > "${backup_path}.sha256"
+    sha256sum "${ENCRYPTED_FILE}" > "${ENCRYPTED_FILE}.sha256"
 
     # Create metadata (with verified=true since we verified above)
-    create_metadata "${backup_path}" "full"
+    create_metadata "${ENCRYPTED_FILE}" "full"
 
     # Update metadata to mark as verified
-    METADATA_FILE="${backup_path}.metadata.json" python3 <<'PYEOF'
+    METADATA_FILE="${ENCRYPTED_FILE}.metadata.json" python3 <<'PYEOF'
 import json
 import os
 metadata_file = os.environ.get('METADATA_FILE', '')
@@ -352,18 +513,18 @@ if metadata_file:
 PYEOF
 
     # Update index
-    update_backup_index "${backup_path}" "full"
+    update_backup_index "${ENCRYPTED_FILE}" "full"
 
-    local file_size=$(stat -c%s "${backup_path}" 2>/dev/null || stat -f%z "${backup_path}")
+    local file_size=$(get_file_size "${ENCRYPTED_FILE}")
     local size_human=$(numfmt --to=iec-i --suffix=B ${file_size} 2>/dev/null || echo "${file_size} bytes")
 
     log_info "=========================================="
     log_info "✓ FULL backup completed successfully"
-    log_info "File: ${backup_path}"
+    log_info "File: ${ENCRYPTED_FILE}"
     log_info "Size: ${size_human}"
     log_info "=========================================="
 
-    echo "${backup_path}"
+    echo "${ENCRYPTED_FILE}"
 }
 
 # Create daily backup
@@ -429,15 +590,32 @@ create_daily_backup() {
         return 1
     fi
 
-    # Create checksum (SHA256 - stronger than MD5)
+    # Backup configuration files (.env, SSL certs, etc.)
+    backup_configuration_files "daily"
+
+    # Encrypt backup if enabled
+    ENCRYPTED_FILE="${backup_path}"
+    if [ "$ENCRYPTION_ENABLED" == "true" ] && [ -n "$ENCRYPTION_PASSPHRASE" ]; then
+        encrypt_backup "${backup_path}"
+        if [ $? -eq 0 ] && [ -f "${backup_path}.gpg" ]; then
+            # Update to point to encrypted file only if it exists
+            ENCRYPTED_FILE="${backup_path}.gpg"
+            log_info "Using encrypted backup file: ${ENCRYPTED_FILE}"
+        else
+            # Encryption failed or skipped, use unencrypted file
+            log_warn "Encryption not available, using unencrypted backup"
+        fi
+    fi
+
+    # Create checksum (SHA256 - stronger than MD5) - on final file (encrypted or not)
     log_info "Generating SHA256 checksum..."
-    sha256sum "${backup_path}" > "${backup_path}.sha256"
+    sha256sum "${ENCRYPTED_FILE}" > "${ENCRYPTED_FILE}.sha256"
 
     # Create metadata (with verified=true since we verified above)
-    create_metadata "${backup_path}" "daily"
+    create_metadata "${ENCRYPTED_FILE}" "daily"
 
     # Update metadata to mark as verified
-    METADATA_FILE="${backup_path}.metadata.json" python3 <<'PYEOF'
+    METADATA_FILE="${ENCRYPTED_FILE}.metadata.json" python3 <<'PYEOF'
 import json
 import os
 metadata_file = os.environ.get('METADATA_FILE', '')
@@ -450,18 +628,18 @@ if metadata_file:
 PYEOF
 
     # Update index
-    update_backup_index "${backup_path}" "daily"
+    update_backup_index "${ENCRYPTED_FILE}" "daily"
 
-    local file_size=$(stat -c%s "${backup_path}" 2>/dev/null || stat -f%z "${backup_path}")
+    local file_size=$(get_file_size "${ENCRYPTED_FILE}")
     local size_human=$(numfmt --to=iec-i --suffix=B ${file_size} 2>/dev/null || echo "${file_size} bytes")
 
     log_info "=========================================="
     log_info "✓ DAILY backup completed successfully"
-    log_info "File: ${backup_path}"
+    log_info "File: ${ENCRYPTED_FILE}"
     log_info "Size: ${size_human}"
     log_info "=========================================="
 
-    echo "${backup_path}"
+    echo "${ENCRYPTED_FILE}"
 }
 
 # Auto-decide backup type (full on Sunday, daily otherwise)
@@ -701,7 +879,7 @@ main() {
         --full)
             local backup_file=$(create_full_backup)
             if [ $? -eq 0 ] && [ -n "$backup_file" ]; then
-                local backup_size=$(stat -c%s "${backup_file}" 2>/dev/null || stat -f%z "${backup_file}" || echo "0")
+                local backup_size=$(get_file_size "${backup_file}" || echo "0")
                 local size_human=$(numfmt --to=iec-i --suffix=B ${backup_size} 2>/dev/null || echo "${backup_size} bytes")
                 send_email_notification "success" "FULL" "$backup_file" "$size_human"
             else
@@ -711,7 +889,7 @@ main() {
         --daily)
             local backup_file=$(create_daily_backup)
             if [ $? -eq 0 ] && [ -n "$backup_file" ]; then
-                local backup_size=$(stat -c%s "${backup_file}" 2>/dev/null || stat -f%z "${backup_file}" || echo "0")
+                local backup_size=$(get_file_size "${backup_file}" || echo "0")
                 local size_human=$(numfmt --to=iec-i --suffix=B ${backup_size} 2>/dev/null || echo "${backup_size} bytes")
                 send_email_notification "success" "DAILY" "$backup_file" "$size_human"
             else
@@ -726,7 +904,7 @@ main() {
                 if [[ "$backup_file" == *"backup_full"* ]]; then
                     backup_type="FULL"
                 fi
-                local backup_size=$(stat -c%s "${backup_file}" 2>/dev/null || stat -f%z "${backup_file}" || echo "0")
+                local backup_size=$(get_file_size "${backup_file}" || echo "0")
                 local size_human=$(numfmt --to=iec-i --suffix=B ${backup_size} 2>/dev/null || echo "${backup_size} bytes")
                 send_email_notification "success" "$backup_type" "$backup_file" "$size_human"
             else

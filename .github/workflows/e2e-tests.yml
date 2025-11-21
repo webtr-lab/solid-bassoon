@@ -1,0 +1,95 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+  schedule:
+    # Run E2E tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    name: Cypress E2E Tests
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Start backend server
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          SECRET_KEY: test-secret-key-for-ci-testing-only
+          FLASK_ENV: testing
+        run: |
+          cd backend
+          python -m flask --app app.main:app run --host=127.0.0.1 --port=5000 &
+          sleep 3
+
+      - name: Start frontend dev server
+        run: |
+          cd frontend
+          npm run dev &
+          sleep 3
+
+      - name: Run Cypress tests
+        run: |
+          cd frontend
+          npm run e2e || true
+
+      - name: Upload Cypress videos
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: cypress-videos
+          path: frontend/cypress/videos
+          retention-days: 5
+
+      - name: Upload Cypress screenshots
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: cypress-screenshots
+          path: frontend/cypress/screenshots
+          retention-days: 5

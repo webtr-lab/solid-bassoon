@@ -8,6 +8,7 @@ from flask_login import login_required
 from app.models import db, Vehicle
 from app.security import ValidationError, validate_gps_coordinates
 from app.services.location_service import save_location
+from app.websocket_events import broadcast_location_update
 
 locations_bp = Blueprint('locations', __name__, url_prefix='/api')
 
@@ -51,6 +52,17 @@ def receive_gps():
             f"GPS data received for vehicle {vehicle.name} "
             f"at ({latitude:.6f}, {longitude:.6f}), speed: {speed} km/h"
         )
+
+        # Broadcast location update via WebSocket for real-time tracking
+        broadcast_location_update(vehicle.id, {
+            'id': location.id,
+            'latitude': location.latitude,
+            'longitude': location.longitude,
+            'speed': location.speed,
+            'heading': location.heading,
+            'accuracy': location.accuracy,
+            'timestamp': location.timestamp.isoformat()
+        })
 
         return jsonify({
             'message': 'Location data received',
