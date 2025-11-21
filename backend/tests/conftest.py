@@ -3,9 +3,10 @@ Pytest configuration and fixtures for backend tests
 Provides comprehensive test fixtures for all models and authentication scenarios
 """
 import os
-# Set test database URL before importing the app to ensure proper initialization
+# Set test environment variables before importing the app to ensure proper initialization
 os.environ.setdefault('DATABASE_URL', 'sqlite:///:memory:')
 os.environ.setdefault('SECRET_KEY', 'test-secret-key-for-pytest')
+os.environ.setdefault('FLASK_ENV', 'testing')
 
 import pytest
 from datetime import datetime, timedelta
@@ -20,6 +21,7 @@ def app_config():
     app.config['TESTING'] = True
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     app.config['WTF_CSRF_ENABLED'] = False
+    app.config['JSON_SORT_KEYS'] = False
     return app
 
 

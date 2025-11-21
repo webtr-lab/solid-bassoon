@@ -2,6 +2,35 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 
+
+def _setup_console_logging_only(app):
+    """Setup console-only logging (used in test mode or when file logging fails)"""
+    log_level = logging.DEBUG if app.config.get('DEBUG', False) else logging.INFO
+
+    formatter = logging.Formatter(
+        '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
+    # Remove default handlers
+    app.logger.handlers.clear()
+
+    # Console handler only
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    console_handler.setLevel(log_level)
+    app.logger.addHandler(console_handler)
+    app.logger.setLevel(log_level)
+
+    # Create access logger with console only
+    access_logger = logging.getLogger('access')
+    access_logger.handlers.clear()
+    access_logger.addHandler(console_handler)
+    access_logger.setLevel(logging.INFO)
+
+    return access_logger
+
+
 def setup_logging(app):
     """
     Configure application logging with file rotation
@@ -12,12 +41,24 @@ def setup_logging(app):
     - access.log: HTTP access logs
 
     Log rotation: Max 10MB per file, keeps 10 backup files
+
+    In test mode, only console logging is used (no file logging)
     """
+
+    # Skip file logging in test mode (check environment variable since TESTING may not be set in app.config yet)
+    is_testing = os.getenv('FLASK_ENV') == 'testing' or app.config.get('TESTING')
+    if is_testing:
+        return _setup_console_logging_only(app)
 
     # Create logs directory if it doesn't exist
     log_dir = '/app/logs'
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
+    try:
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir, exist_ok=True)
+    except (OSError, PermissionError):
+        # Fallback to console only if directory creation fails
+        app.logger.warning(f"Could not create log directory {log_dir}, using console logging only")
+        return _setup_console_logging_only(app)
 
     # Set base logging level
     log_level = logging.DEBUG if app.config.get('DEBUG', False) else logging.INFO
