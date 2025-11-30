@@ -214,8 +214,8 @@
 
         <div id="mainCard" class="card hidden">
             <div class="form-group">
-                <label for="serverUrl">Server URL</label>
-                <input type="text" id="serverUrl" placeholder="https://gps.yourdomain.com">
+                <label for="serverUrlMain">Server URL</label>
+                <input type="text" id="serverUrlMain" placeholder="https://gps.yourdomain.com">
                 <small style="color: #6b7280; font-size: 12px; margin-top: 4px; display: block;">Change server without logging out</small>
             </div>
 
@@ -322,9 +322,22 @@
         const cancelCheckInBtn = document.getElementById('cancelCheckInBtn');
         const statusDiv = document.getElementById('status');
         const serverUrlInput = document.getElementById('serverUrl');
+        const serverUrlMainInput = document.getElementById('serverUrlMain');
         const vehicleSelect = document.getElementById('vehicleSelect');
         const updateIntervalSelect = document.getElementById('updateInterval');
         const statsContainer = document.getElementById('statsContainer');
+
+        // Sync server URL fields between login and main interface
+        serverUrlInput.addEventListener('change', () => {
+            if (serverUrlMainInput) {
+                serverUrlMainInput.value = serverUrlInput.value;
+            }
+        });
+        if (serverUrlMainInput) {
+            serverUrlMainInput.addEventListener('change', () => {
+                serverUrlInput.value = serverUrlMainInput.value;
+            });
+        }
 
         // Set default server URL based on environment
         let detectedUrl;
@@ -528,6 +541,10 @@
             loginCard.classList.add('hidden');
             mainCard.classList.remove('hidden');
             currentUserSpan.textContent = `${currentUser.username} (${currentUser.role})`;
+            // Sync server URL to main card
+            if (serverUrlMainInput) {
+                serverUrlMainInput.value = serverUrlInput.value;
+            }
         }
 
         function showLoginCard() {
