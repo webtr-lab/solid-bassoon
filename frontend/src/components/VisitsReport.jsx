@@ -10,10 +10,14 @@ function VisitsReport() {
   });
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [areaFilter, setAreaFilter] = useState('');
+  const [vehicleFilter, setVehicleFilter] = useState('');
+  const [placeFilter, setPlaceFilter] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [report, setReport] = useState(null);
   const [expandedLocations, setExpandedLocations] = useState(new Set());
+  const [vehicles, setVehicles] = useState([]);
+  const [places, setPlaces] = useState([]);
 
   const fetchReport = async () => {
     setLoading(true);
@@ -22,7 +26,9 @@ function VisitsReport() {
       const params = new URLSearchParams({
         start: `${startDate}T00:00:00`,
         end: `${endDate}T23:59:59`,
-        ...(areaFilter && { area: areaFilter })
+        ...(areaFilter && { area: areaFilter }),
+        ...(vehicleFilter && { vehicle_id: vehicleFilter }),
+        ...(placeFilter && { place_id: placeFilter })
       });
 
       const data = await apiFetch(`/api/reports/visits-detailed?${params}`);
@@ -37,6 +43,23 @@ function VisitsReport() {
 
   useEffect(() => {
     fetchReport();
+  }, []);
+
+  useEffect(() => {
+    // Load vehicles and places on component mount
+    const loadFilters = async () => {
+      try {
+        const [vehiclesData, placesData] = await Promise.all([
+          apiFetch('/api/vehicles'),
+          apiFetch('/api/places-of-interest')
+        ]);
+        setVehicles(vehiclesData.sort((a, b) => a.name.localeCompare(b.name)));
+        setPlaces(placesData.sort((a, b) => a.name.localeCompare(b.name)));
+      } catch (err) {
+        logger.error('Error loading filter options:', err);
+      }
+    };
+    loadFilters();
   }, []);
 
   const toggleLocation = (locationIndex) => {
@@ -122,7 +145,7 @@ function VisitsReport() {
       <h2 className="text-2xl font-bold mb-6">Visits Report</h2>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
           <input
@@ -144,14 +167,46 @@ function VisitsReport() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Area Filter (Optional)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Area (Optional)</label>
           <input
             type="text"
             value={areaFilter}
             onChange={(e) => setAreaFilter(e.target.value)}
-            placeholder="e.g., Centrum, Maretraite"
+            placeholder="e.g., Centrum"
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Vehicle (Optional)</label>
+          <select
+            value={vehicleFilter}
+            onChange={(e) => setVehicleFilter(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Vehicles</option>
+            {vehicles.map((vehicle) => (
+              <option key={vehicle.id} value={vehicle.id}>
+                {vehicle.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Place (Optional)</label>
+          <select
+            value={placeFilter}
+            onChange={(e) => setPlaceFilter(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Places</option>
+            {places.map((place) => (
+              <option key={place.id} value={place.id}>
+                {place.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="flex items-end">
@@ -160,7 +215,7 @@ function VisitsReport() {
             disabled={loading}
             className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50"
           >
-            {loading ? 'Loading...' : 'Generate Report'}
+            {loading ? 'Loading...' : 'Generate'}
           </button>
         </div>
       </div>

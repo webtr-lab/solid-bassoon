@@ -164,10 +164,14 @@ def report_visits_detailed():
       - start: ISO date/time or date (optional, default 7 days ago)
       - end: ISO date/time or date (optional, default now)
       - area: filter by area (optional)
+      - vehicle_id: filter by vehicle ID (optional)
+      - place_id: filter by place of interest ID (optional)
     """
     start_str = request.args.get('start')
     end_str = request.args.get('end')
     area_filter = request.args.get('area', '').strip()
+    vehicle_id = request.args.get('vehicle_id', type=int)
+    place_id = request.args.get('place_id', type=int)
 
     try:
         if start_str:
@@ -186,10 +190,16 @@ def report_visits_detailed():
 
     try:
         # Load saved locations (visits) in time window
-        visits = SavedLocation.query.filter(
+        query = SavedLocation.query.filter(
             SavedLocation.timestamp >= start,
             SavedLocation.timestamp <= end
-        ).all()
+        )
+
+        # Filter by vehicle if specified
+        if vehicle_id:
+            query = query.filter(SavedLocation.vehicle_id == vehicle_id)
+
+        visits = query.all()
 
         # Load all places for matching
         places = PlaceOfInterest.query.all()
@@ -215,6 +225,7 @@ def report_visits_detailed():
                     'latitude': visit.latitude,
                     'longitude': visit.longitude,
                     'area': matched_place.area if matched_place else '',
+                    'place_id': matched_place.id if matched_place else None,
                     'visits': []
                 }
 
@@ -233,6 +244,10 @@ def report_visits_detailed():
             location['visit_count'] = len(location['visits'])
             # Sort visits by timestamp descending (most recent first)
             location['visits'].sort(key=lambda v: v['timestamp'], reverse=True)
+
+        # Filter by place if specified
+        if place_id:
+            results = [r for r in results if r.get('place_id') == place_id]
 
         # Filter by area if specified
         if area_filter:
