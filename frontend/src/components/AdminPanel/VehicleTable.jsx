@@ -18,7 +18,7 @@ function VehicleTable({ vehicles, onEdit, onToggleActive, onDelete }) {
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {vehicles.map(vehicle => (
+          {vehicles.sort((a, b) => a.name.localeCompare(b.name)).map(vehicle => (
             <tr key={vehicle.id} className={!vehicle.is_active ? 'bg-gray-50' : ''}>
               <td className="px-6 py-4 whitespace-nowrap font-medium">{vehicle.name}</td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{vehicle.device_id}</td>

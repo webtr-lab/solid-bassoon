@@ -90,7 +90,7 @@ def detect_and_save_stops(vehicle_id, current_location):
 
 def save_location(vehicle_id, latitude, longitude, speed=0.0):
     """
-    Save a GPS location for a vehicle and check for stops
+    Save a GPS location for a vehicle
 
     Args:
         vehicle_id: ID of the vehicle
@@ -110,7 +110,8 @@ def save_location(vehicle_id, latitude, longitude, speed=0.0):
             timestamp=datetime.utcnow()
         )
         db.session.add(location)
-        detect_and_save_stops(vehicle_id, location)
+        # NOTE: Automatic stop detection has been disabled per user request
+        # Users can manually save stops via the SavedLocation interface
 
         return location
     except Exception as e:

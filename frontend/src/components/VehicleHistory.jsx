@@ -118,6 +118,11 @@ function VehicleHistory({ savedLocations, onRefresh, vehicleId }) {
             ) : (
               <>
                 <div className="font-semibold text-sm">📍 {loc.name}</div>
+                {loc.area && (
+                  <div className="text-xs text-gray-600 mt-1">
+                    Area: {loc.area}
+                  </div>
+                )}
                 <div className="text-xs text-gray-600 mt-1">
                   {new Date(loc.timestamp).toLocaleString()}
                 </div>

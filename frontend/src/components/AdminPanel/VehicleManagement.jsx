@@ -26,7 +26,8 @@ function VehicleManagement() {
 
   const fetchVehicles = async () => {
     try {
-      const data = await apiFetch('/api/vehicles');
+      // Admin panel needs to see all vehicles (including inactive) to manage them
+      const data = await apiFetch('/api/vehicles?include_inactive=true');
       setVehicles(data.data);
     } catch (error) {
       logger.error('Error fetching vehicles', error);

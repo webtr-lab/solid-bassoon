@@ -12,6 +12,11 @@ from app.services.place_service import get_visit_analytics
 reports_bp = Blueprint('reports', __name__, url_prefix='/api/reports')
 
 
+def get_local_time():
+    """Get current local server time instead of UTC"""
+    return datetime.now()
+
+
 @reports_bp.route('/visits', methods=['GET'])
 @login_required
 def report_visits():
@@ -31,12 +36,12 @@ def report_visits():
         if start_str:
             start = datetime.fromisoformat(start_str)
         else:
-            start = datetime.utcnow() - timedelta(days=7)
+            start = get_local_time() - timedelta(days=7)
 
         if end_str:
             end = datetime.fromisoformat(end_str)
         else:
-            end = datetime.utcnow()
+            end = get_local_time()
     except ValueError:
         return jsonify({
             'error': 'Invalid date format. Use ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)'
@@ -65,3 +70,72 @@ def report_visits():
     except Exception as e:
         current_app.logger.error(f"Error generating visit report: {str(e)}")
         return jsonify({'error': 'Failed to generate visit report'}), 500
+
+
+@reports_bp.route('/check-ins', methods=['GET'])
+@login_required
+def report_check_ins():
+    """
+    Return manual location check-ins (saved locations excluding auto-detected stops)
+
+    Query params:
+      - start: ISO date/time or date (optional, default 7 days ago)
+      - end: ISO date/time or date (optional, default now)
+      - vehicle_id: filter by vehicle (optional)
+    """
+    start_str = request.args.get('start')
+    end_str = request.args.get('end')
+    vehicle_id = request.args.get('vehicle_id', type=int)
+
+    try:
+        if start_str:
+            start = datetime.fromisoformat(start_str)
+        else:
+            start = get_local_time() - timedelta(days=7)
+
+        if end_str:
+            end = datetime.fromisoformat(end_str)
+        else:
+            end = get_local_time()
+    except ValueError:
+        return jsonify({
+            'error': 'Invalid date format. Use ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)'
+        }), 400
+
+    try:
+        # Load manual saved locations (excluding auto-detected stops)
+        query = SavedLocation.query.filter(
+            SavedLocation.timestamp >= start,
+            SavedLocation.timestamp <= end,
+            (SavedLocation.visit_type != 'auto_detected') | (SavedLocation.visit_type.is_(None))
+        )
+
+        # Filter by vehicle if specified
+        if vehicle_id:
+            query = query.filter(SavedLocation.vehicle_id == vehicle_id)
+
+        check_ins = query.order_by(SavedLocation.timestamp.desc()).all()
+
+        # Format results
+        results = [{
+            'id': ci.id,
+            'vehicle_id': ci.vehicle_id,
+            'vehicle_name': ci.vehicle.name if ci.vehicle else 'Unknown',
+            'name': ci.name,
+            'latitude': ci.latitude,
+            'longitude': ci.longitude,
+            'timestamp': ci.timestamp.isoformat(),
+            'notes': ci.notes,
+            'visit_type': ci.visit_type or 'manual'
+        } for ci in check_ins]
+
+        return jsonify({
+            'start': start.isoformat(),
+            'end': end.isoformat(),
+            'count': len(results),
+            'results': results
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error generating check-in report: {str(e)}")
+        return jsonify({'error': 'Failed to generate check-in report'}), 500

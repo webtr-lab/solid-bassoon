@@ -26,7 +26,7 @@ function VehicleList({ vehicles, selectedVehicle, onSelectVehicle, collapsed = f
       </div>
       {!collapsed && (
         <div className="space-y-2">
-        {vehicles.map((vehicle, idx) => (
+        {vehicles.sort((a, b) => a.name.localeCompare(b.name)).map((vehicle, idx) => (
           <button
             key={vehicle.id}
             onClick={() => onSelectVehicle(vehicle.id === selectedVehicle?.id ? null : vehicle)}
@@ -35,6 +35,7 @@ function VehicleList({ vehicles, selectedVehicle, onSelectVehicle, collapsed = f
                 ? 'bg-blue-100 border-2 border-blue-500'
                 : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
             }`}
+            title={vehicle.id === selectedVehicle?.id ? 'Click to hide details' : 'Click to see details'}
           >
             <div className="flex items-center gap-3">
               <div className={`w-4 h-4 rounded-full ${vehicleColors[idx % vehicleColors.length]}`}></div>

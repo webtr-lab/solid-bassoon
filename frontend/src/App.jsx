@@ -11,6 +11,7 @@ import { useFetchVehicles } from './hooks/useFetchVehicles';
 import { useVehicleDetails } from './hooks/useVehicleDetails';
 import { useFetchPlaces } from './hooks/useFetchPlaces';
 import { MAP_CONFIG, ADMIN_ROLES } from './constants';
+import { initTimeSync } from './utils/timeSync';
 
 // Role permissions checker
 const canAccessAdmin = (userRole) => {
@@ -38,6 +39,11 @@ function App() {
   // Combine errors
   const error = authError || vehiclesError;
   const setError = authError ? setAuthError : setVehiclesError;
+
+  // Initialize server time synchronization on app load
+  useEffect(() => {
+    initTimeSync();
+  }, []);
 
   const handleSelectVehicle = (vehicle) => {
     setSelectedVehicle(vehicle);

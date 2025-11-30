@@ -13,12 +13,12 @@ function POIFormModal({ isOpen, isEditing, formData, onChange, onSubmit, onCance
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-96 overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md my-auto">
         <h3 className="text-xl font-bold mb-4">
           {isEditing ? 'Edit Place' : 'Add New Place'}
         </h3>
-        <form onSubmit={onSubmit} className="space-y-3">
+        <form onSubmit={onSubmit} className="space-y-2">
           <div>
             <label className="block text-sm font-medium mb-1">Name</label>
             <input
@@ -50,18 +50,24 @@ function POIFormModal({ isOpen, isEditing, formData, onChange, onSubmit, onCance
           <div>
             <label className="block text-sm font-medium mb-1">Category</label>
             <select value={formData.category} onChange={(e) => handleChange('category', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm">
-              <option>General</option>
-              <option>Restaurant</option>
-              <option>Gas Station</option>
-              <option>Office</option>
-              <option>Warehouse</option>
-              <option>Client</option>
-              <option>Parking</option>
-              <option>Home</option>
-              <option>Service Center</option>
+              {['Client', 'Gas Station', 'General', 'Home', 'Mom & Pops', 'Office', 'Parking', 'Restaurant', 'Service Center', 'Supermarket', 'Superstore', 'Warehouse'].map(cat => (
+                <option key={cat}>{cat}</option>
+              ))}
             </select>
           </div>
-          <div className="flex gap-2">
+          <div>
+            <label className="block text-sm font-medium mb-1">Contact</label>
+            <input type="text" value={formData.contact || ''} onChange={(e) => handleChange('contact', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Contact name" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Telephone</label>
+            <input type="text" value={formData.telephone || ''} onChange={(e) => handleChange('telephone', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Phone number" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Description/Notes</label>
+            <textarea value={formData.description || ''} onChange={(e) => handleChange('description', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Optional description or notes" rows="2" />
+          </div>
+          <div className="flex gap-2 pt-2">
             <button type="submit" disabled={loading} className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50">
               {loading ? 'Saving...' : (isEditing ? 'Update' : 'Add')}
             </button>

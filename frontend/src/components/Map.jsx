@@ -63,7 +63,7 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
     const contact = prompt('Enter contact name (optional):', '');
     const telephone = prompt('Enter phone number (optional):', '');
 
-    const categories = ['Restaurant', 'Gas Station', 'Office', 'Warehouse', 'Client', 'Parking', 'Home', 'Service Center', 'General'];
+    const categories = ['Client', 'Gas Station', 'General', 'Home', 'Mom & Pops', 'Office', 'Parking', 'Restaurant', 'Service Center', 'Supermarket', 'Superstore', 'Warehouse'];
     const categoryChoice = prompt(`Enter category:\n${categories.map((c, i) => `${i+1}. ${c}`).join('\n')}\n\nEnter number (1-${categories.length}) or custom name:`, '9');
 
     let category = 'General';
@@ -196,7 +196,7 @@ return;
     const contact = prompt('Enter contact name (optional):', '');
     const telephone = prompt('Enter phone number (optional):', '');
 
-    const categories = ['Restaurant', 'Gas Station', 'Office', 'Warehouse', 'Client', 'Parking', 'Home', 'Service Center', 'General'];
+    const categories = ['Client', 'Gas Station', 'General', 'Home', 'Mom & Pops', 'Office', 'Parking', 'Restaurant', 'Service Center', 'Supermarket', 'Superstore', 'Warehouse'];
     const categoryChoice = prompt(`Enter category:\n${categories.map((c, i) => `${i+1}. ${c}`).join('\n')}\n\nEnter number (1-${categories.length}) or custom name:`, '9');
 
     let category = 'General';

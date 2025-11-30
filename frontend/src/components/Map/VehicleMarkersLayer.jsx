@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Marker, Popup, Polyline, CircleMarker } from 'react-leaflet';
 import PropTypes from 'prop-types';
 import { createColoredIcon, vehicleColors } from '../../utils/markerIcons';
@@ -21,10 +21,24 @@ function VehicleMarkersLayer({
   vehicleHistory,
   showVehicles,
 }) {
+  const popupRefs = useRef({});
+
   // No vehicles to show
   if (!vehicles || vehicles.length === 0) {
     return null;
   }
+
+  const handleMarkerMouseEnter = (key) => {
+    if (popupRefs.current[key]) {
+      popupRefs.current[key].openPopup();
+    }
+  };
+
+  const handleMarkerMouseLeave = (key) => {
+    if (popupRefs.current[key]) {
+      popupRefs.current[key].closePopup();
+    }
+  };
 
   return (
     <>
@@ -42,6 +56,13 @@ function VehicleMarkersLayer({
             key={vehicle.id}
             position={[vehicle.lastLocation.latitude, vehicle.lastLocation.longitude]}
             icon={createColoredIcon(color)}
+            eventHandlers={{
+              mouseover: () => handleMarkerMouseEnter(`vehicle-${vehicle.id}`),
+              mouseout: () => handleMarkerMouseLeave(`vehicle-${vehicle.id}`),
+            }}
+            ref={(el) => {
+              if (el) popupRefs.current[`vehicle-${vehicle.id}`] = el;
+            }}
           >
             <Popup>
               <div className="text-sm">
@@ -76,6 +97,13 @@ function VehicleMarkersLayer({
               fillColor={vehicleColors[(selectedVehicle.id - 1) % vehicleColors.length]}
               fillOpacity={0.6}
               stroke={false}
+              eventHandlers={{
+                mouseover: () => handleMarkerMouseEnter(`history-${idx}`),
+                mouseout: () => handleMarkerMouseLeave(`history-${idx}`),
+              }}
+              ref={(el) => {
+                if (el) popupRefs.current[`history-${idx}`] = el;
+              }}
             >
               <Popup>
                 <div className="text-xs">
@@ -94,6 +122,13 @@ function VehicleMarkersLayer({
               vehicleHistory[vehicleHistory.length - 1].longitude,
             ]}
             icon={createColoredIcon(vehicleColors[(selectedVehicle.id - 1) % vehicleColors.length])}
+            eventHandlers={{
+              mouseover: () => handleMarkerMouseEnter(`current-${selectedVehicle.id}`),
+              mouseout: () => handleMarkerMouseLeave(`current-${selectedVehicle.id}`),
+            }}
+            ref={(el) => {
+              if (el) popupRefs.current[`current-${selectedVehicle.id}`] = el;
+            }}
           >
             <Popup>
               <div className="text-sm">

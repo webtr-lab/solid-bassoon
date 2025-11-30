@@ -22,13 +22,26 @@ vehicles_bp = Blueprint('vehicles', __name__, url_prefix='/api/vehicles')
 @vehicles_bp.route('', methods=['GET'])
 @login_required
 def list_vehicles():
-    """List all vehicles with pagination"""
+    """List vehicles with optional filtering
+
+    Query params:
+      - include_inactive: true/false (default: false)
+        When true, returns all vehicles (for admin panel)
+        When false, returns only active vehicles (for tracking dashboard)
+    """
     try:
         # Parse pagination parameters
         pagination = PaginationParams.from_request(request)
 
-        # Get total count before applying pagination
-        query = Vehicle.query
+        # Check if admin is requesting all vehicles (for admin panel)
+        include_inactive = request.args.get('include_inactive', 'false').lower() == 'true'
+
+        # Build query - show all vehicles if include_inactive=true, otherwise show only active
+        if include_inactive:
+            query = Vehicle.query
+        else:
+            query = Vehicle.query.filter_by(is_active=True)
+
         total_count = query.count()
 
         # Apply pagination

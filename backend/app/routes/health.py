@@ -85,6 +85,18 @@ def liveness_check():
         return jsonify({'alive': False}), 503
 
 
+@health_bp.route('/time', methods=['GET'])
+def get_server_time():
+    """
+    Get current server time for client synchronization
+    Clients should use this timestamp to stay in sync with server time
+    """
+    return jsonify({
+        'timestamp': datetime.utcnow().isoformat(),
+        'unix_timestamp': datetime.utcnow().timestamp()
+    }), 200
+
+
 def _get_database_health():
     """Check database connectivity and health"""
     try:

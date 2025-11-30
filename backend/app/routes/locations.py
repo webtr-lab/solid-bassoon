@@ -59,8 +59,6 @@ def receive_gps():
             'latitude': location.latitude,
             'longitude': location.longitude,
             'speed': location.speed,
-            'heading': location.heading,
-            'accuracy': location.accuracy,
             'timestamp': location.timestamp.isoformat()
         })
 
