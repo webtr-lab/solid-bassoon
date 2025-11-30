@@ -15,6 +15,28 @@ function POIFormModal({ isOpen, isEditing, formData, onChange, onSubmit, onCance
     onChange({ ...formData, [field]: value });
   };
 
+  // Calculate Levenshtein distance for typo detection
+  const levenshteinDistance = (str1, str2) => {
+    const len1 = str1.length;
+    const len2 = str2.length;
+    const matrix = Array(len2 + 1).fill(null).map(() => Array(len1 + 1).fill(0));
+
+    for (let i = 0; i <= len1; i++) matrix[0][i] = i;
+    for (let j = 0; j <= len2; j++) matrix[j][0] = j;
+
+    for (let j = 1; j <= len2; j++) {
+      for (let i = 1; i <= len1; i++) {
+        const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+        matrix[j][i] = Math.min(
+          matrix[j][i - 1] + 1,
+          matrix[j - 1][i] + 1,
+          matrix[j - 1][i - 1] + cost
+        );
+      }
+    }
+    return matrix[len2][len1];
+  };
+
   const handleAreaBlur = async () => {
     const areaValue = formData.area?.trim();
     if (!areaValue) return; // Skip validation for empty area
@@ -25,13 +47,34 @@ function POIFormModal({ isOpen, isEditing, formData, onChange, onSubmit, onCance
       const existingAreas = response.areas || [];
       const areaLower = areaValue.toLowerCase();
 
-      const matchedArea = existingAreas.find(area => area.toLowerCase() === areaLower);
-      if (matchedArea) {
+      // Check for exact match
+      const exactMatch = existingAreas.find(area => area.toLowerCase() === areaLower);
+      if (exactMatch) {
         const useExisting = window.confirm(
-          `Area "${matchedArea}" already exists.\n\nClick OK to use the existing area "${matchedArea}"\n\nClick Cancel to keep your entry "${areaValue}"`
+          `Area "${exactMatch}" already exists.\n\nClick OK to use the existing area "${exactMatch}"\n\nClick Cancel to keep your entry "${areaValue}"`
         );
         if (useExisting) {
-          onChange({ ...formData, area: matchedArea });
+          onChange({ ...formData, area: exactMatch });
+        }
+        return;
+      }
+
+      // Check for similar matches (typos)
+      const similarMatches = existingAreas
+        .map(area => ({
+          area,
+          distance: levenshteinDistance(areaLower, area.toLowerCase())
+        }))
+        .filter(item => item.distance > 0 && item.distance <= 2)
+        .sort((a, b) => a.distance - b.distance);
+
+      if (similarMatches.length > 0) {
+        const suggestion = similarMatches[0].area;
+        const useExisting = window.confirm(
+          `Did you mean "${suggestion}"?\n\nClick OK to use "${suggestion}"\n\nClick Cancel to keep your entry "${areaValue}"`
+        );
+        if (useExisting) {
+          onChange({ ...formData, area: suggestion });
         }
       }
     } catch (error) {

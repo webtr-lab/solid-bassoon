@@ -49,6 +49,28 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
     }
   }, [initialZoom]);
 
+  // Calculate Levenshtein distance for typo detection
+  const levenshteinDistance = (str1, str2) => {
+    const len1 = str1.length;
+    const len2 = str2.length;
+    const matrix = Array(len2 + 1).fill(null).map(() => Array(len1 + 1).fill(0));
+
+    for (let i = 0; i <= len1; i++) matrix[0][i] = i;
+    for (let j = 0; j <= len2; j++) matrix[j][0] = j;
+
+    for (let j = 1; j <= len2; j++) {
+      for (let i = 1; i <= len1; i++) {
+        const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+        matrix[j][i] = Math.min(
+          matrix[j][i - 1] + 1,     // deletion
+          matrix[j - 1][i] + 1,     // insertion
+          matrix[j - 1][i - 1] + cost // substitution
+        );
+      }
+    }
+    return matrix[len2][len1];
+  };
+
   const validateAndSuggestArea = async (enteredArea) => {
     if (!enteredArea || enteredArea.trim() === '') {
       return enteredArea; // Return empty area as-is
@@ -59,14 +81,31 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
       const existingAreas = response.areas || [];
       const enteredLower = enteredArea.toLowerCase().trim();
 
-      // Check if area matches any existing area (case-insensitive)
-      const matchedArea = existingAreas.find(area => area.toLowerCase() === enteredLower);
+      // Check for exact match (case-insensitive)
+      const exactMatch = existingAreas.find(area => area.toLowerCase() === enteredLower);
 
-      if (matchedArea) {
+      if (exactMatch) {
         const useExisting = window.confirm(
-          `Area "${matchedArea}" already exists.\n\nClick OK to use the existing area "${matchedArea}"\n\nClick Cancel to create new area "${enteredArea}"`
+          `Area "${exactMatch}" already exists.\n\nClick OK to use the existing area "${exactMatch}"\n\nClick Cancel to create new area "${enteredArea}"`
         );
-        return useExisting ? matchedArea : enteredArea;
+        return useExisting ? exactMatch : enteredArea;
+      }
+
+      // Check for similar matches (potential typos)
+      const similarMatches = existingAreas
+        .map(area => ({
+          area,
+          distance: levenshteinDistance(enteredLower, area.toLowerCase())
+        }))
+        .filter(item => item.distance > 0 && item.distance <= 2) // Typo threshold: up to 2 character differences
+        .sort((a, b) => a.distance - b.distance);
+
+      if (similarMatches.length > 0) {
+        const suggestion = similarMatches[0].area;
+        const useExisting = window.confirm(
+          `Did you mean "${suggestion}"?\n\nClick OK to use "${suggestion}"\n\nClick Cancel to create new area "${enteredArea}"`
+        );
+        return useExisting ? suggestion : enteredArea;
       }
 
       return enteredArea;
