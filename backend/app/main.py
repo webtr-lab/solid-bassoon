@@ -56,7 +56,7 @@ migrate = Migrate(app, db)
 bcrypt = Bcrypt(app)
 limiter.init_app(app)
 login_manager = LoginManager(app)
-login_manager.login_view = 'login'
+login_manager.login_view = 'auth.login'
 
 # Initialize WebSocket support
 socketio = SocketIO(

@@ -139,3 +139,91 @@ def report_check_ins():
     except Exception as e:
         current_app.logger.error(f"Error generating check-in report: {str(e)}")
         return jsonify({'error': 'Failed to generate check-in report'}), 500
+
+
+@reports_bp.route('/visits-detailed', methods=['GET'])
+@login_required
+def report_visits_detailed():
+    """
+    Return detailed visits report grouped by location with vehicle visit details
+
+    Query params:
+      - start: ISO date/time or date (optional, default 7 days ago)
+      - end: ISO date/time or date (optional, default now)
+      - area: filter by area (optional)
+    """
+    start_str = request.args.get('start')
+    end_str = request.args.get('end')
+    area_filter = request.args.get('area', '').strip()
+
+    try:
+        if start_str:
+            start = datetime.fromisoformat(start_str)
+        else:
+            start = get_local_time() - timedelta(days=7)
+
+        if end_str:
+            end = datetime.fromisoformat(end_str)
+        else:
+            end = get_local_time()
+    except ValueError:
+        return jsonify({
+            'error': 'Invalid date format. Use ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)'
+        }), 400
+
+    try:
+        # Load saved locations (visits) in time window
+        visits = SavedLocation.query.filter(
+            SavedLocation.timestamp >= start,
+            SavedLocation.timestamp <= end
+        ).all()
+
+        # Group visits by location (name, lat, lon)
+        locations_dict = {}
+        for visit in visits:
+            # Create a location key based on coordinates (with rounding for grouping nearby visits)
+            lat_rounded = round(visit.latitude, 4)
+            lon_rounded = round(visit.longitude, 4)
+            location_key = f"{lat_rounded},{lon_rounded}"
+
+            if location_key not in locations_dict:
+                locations_dict[location_key] = {
+                    'name': visit.name,
+                    'latitude': visit.latitude,
+                    'longitude': visit.longitude,
+                    'area': '',
+                    'visits': []
+                }
+
+            locations_dict[location_key]['visits'].append({
+                'vehicle_id': visit.vehicle_id,
+                'vehicle_name': visit.vehicle.name if visit.vehicle else 'Unknown',
+                'timestamp': visit.timestamp.isoformat(),
+                'notes': visit.notes or ''
+            })
+
+        # Convert to list and sort by visit count descending
+        results = list(locations_dict.values())
+        for location in results:
+            location['visit_count'] = len(location['visits'])
+            # Sort visits by timestamp descending (most recent first)
+            location['visits'].sort(key=lambda v: v['timestamp'], reverse=True)
+
+        # Filter by area if specified
+        if area_filter:
+            results = [r for r in results if area_filter.lower() in r['area'].lower()]
+
+        # Sort by visit count descending
+        results.sort(key=lambda x: x['visit_count'], reverse=True)
+
+        return jsonify({
+            'start': start.isoformat(),
+            'end': end.isoformat(),
+            'total_locations': len(results),
+            'total_visits': sum(loc['visit_count'] for loc in results),
+            'locations': results
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error generating detailed visits report: {str(e)}")
+        return jsonify({'error': 'Failed to generate detailed visits report'}), 500

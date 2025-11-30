@@ -4,7 +4,7 @@ import TabNavigation from './AdminPanel/TabNavigation';
 import UserManagement from './AdminPanel/UserManagement';
 import VehicleManagement from './AdminPanel/VehicleManagement';
 import POIManagement from './AdminPanel/POIManagement';
-import ReportsManagement from './AdminPanel/ReportsManagement';
+import VisitsReport from './VisitsReport';
 
 /**
  * AdminPanel Component
@@ -31,7 +31,7 @@ function AdminPanel({ currentUserRole }) {
         {activeTab === 'users' && currentUserRole === 'admin' && <UserManagement />}
         {activeTab === 'vehicles' && <VehicleManagement />}
         {activeTab === 'poi' && <POIManagement />}
-        {activeTab === 'reports' && <ReportsManagement />}
+        {activeTab === 'reports' && <VisitsReport />}
       </div>
     </div>
   );
