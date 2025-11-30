@@ -8,6 +8,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required
 from app.models import SavedLocation
 from app.services.place_service import get_visit_analytics
+import pytz
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/api/reports')
 
@@ -15,6 +16,18 @@ reports_bp = Blueprint('reports', __name__, url_prefix='/api/reports')
 def get_local_time():
     """Get current local server time instead of UTC"""
     return datetime.now()
+
+
+def convert_utc_to_local(utc_dt):
+    """Convert UTC datetime to local server timezone"""
+    if utc_dt is None:
+        return None
+    # Get system local timezone
+    local_tz = datetime.now().astimezone().tzinfo
+    # Make UTC datetime timezone-aware and convert to local
+    if utc_dt.tzinfo is None:
+        utc_dt = utc_dt.replace(tzinfo=pytz.UTC)
+    return utc_dt.astimezone(local_tz)
 
 
 @reports_bp.route('/visits', methods=['GET'])
@@ -124,7 +137,7 @@ def report_check_ins():
             'name': ci.name,
             'latitude': ci.latitude,
             'longitude': ci.longitude,
-            'timestamp': ci.timestamp.isoformat(),
+            'timestamp': convert_utc_to_local(ci.timestamp).isoformat() if ci.timestamp else '',
             'notes': ci.notes,
             'visit_type': ci.visit_type or 'manual'
         } for ci in check_ins]
@@ -195,10 +208,12 @@ def report_visits_detailed():
                     'visits': []
                 }
 
+            # Convert UTC timestamp to local timezone
+            local_timestamp = convert_utc_to_local(visit.timestamp)
             locations_dict[location_key]['visits'].append({
                 'vehicle_id': visit.vehicle_id,
                 'vehicle_name': visit.vehicle.name if visit.vehicle else 'Unknown',
-                'timestamp': visit.timestamp.isoformat(),
+                'timestamp': local_timestamp.isoformat() if local_timestamp else visit.timestamp.isoformat(),
                 'notes': visit.notes or ''
             })
 
