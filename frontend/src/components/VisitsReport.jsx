@@ -49,12 +49,21 @@ function VisitsReport() {
     // Load vehicles and places on component mount
     const loadFilters = async () => {
       try {
-        const [vehiclesData, placesData] = await Promise.all([
+        const [vehiclesResponse, placesResponse] = await Promise.all([
           apiFetch('/api/vehicles'),
           apiFetch('/api/places-of-interest')
         ]);
-        setVehicles(vehiclesData.sort((a, b) => a.name.localeCompare(b.name)));
-        setPlaces(placesData.sort((a, b) => a.name.localeCompare(b.name)));
+
+        // Handle both direct array and paginated { data, meta } format
+        const vehiclesList = Array.isArray(vehiclesResponse)
+          ? vehiclesResponse
+          : (vehiclesResponse.data || []);
+        const placesList = Array.isArray(placesResponse)
+          ? placesResponse
+          : (placesResponse.data || []);
+
+        setVehicles(vehiclesList.sort((a, b) => a.name.localeCompare(b.name)));
+        setPlaces(placesList.sort((a, b) => a.name.localeCompare(b.name)));
       } catch (err) {
         logger.error('Error loading filter options:', err);
       }
