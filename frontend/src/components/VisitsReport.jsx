@@ -49,6 +49,74 @@ function VisitsReport() {
     setExpandedLocations(newExpanded);
   };
 
+  const exportToCSV = () => {
+    if (!report) return;
+
+    // CSV header
+    const headers = ['Location Name', 'Area', 'Latitude', 'Longitude', 'Visit Count', 'Vehicle Name', 'Timestamp', 'Notes'];
+    const rows = [];
+
+    // Add data rows
+    report.locations.forEach((location) => {
+      if (location.visits.length === 0) {
+        // Location with no visits
+        rows.push([
+          location.name,
+          location.area || '',
+          location.latitude.toFixed(4),
+          location.longitude.toFixed(4),
+          location.visit_count,
+          '',
+          '',
+          ''
+        ]);
+      } else {
+        // Add a row for each visit
+        location.visits.forEach((visit, idx) => {
+          rows.push([
+            idx === 0 ? location.name : '', // Only show location name on first visit
+            idx === 0 ? (location.area || '') : '',
+            idx === 0 ? location.latitude.toFixed(4) : '',
+            idx === 0 ? location.longitude.toFixed(4) : '',
+            idx === 0 ? location.visit_count : '',
+            visit.vehicle_name,
+            new Date(visit.timestamp).toLocaleString(),
+            visit.notes || ''
+          ]);
+        });
+      }
+    });
+
+    // Escape CSV values and join
+    const csvContent = [
+      headers.map(h => `"${h}"`).join(','),
+      ...rows.map(row =>
+        row.map(cell => {
+          const str = String(cell);
+          // Escape quotes and wrap in quotes if contains comma, quote, or newline
+          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return `"${str.replace(/"/g, '""')}"`;
+          }
+          return `"${str}"`;
+        }).join(',')
+      )
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    const fileName = `visits-report-${startDate}_to_${endDate}.csv`;
+    link.setAttribute('href', url);
+    link.setAttribute('download', fileName);
+    link.style.visibility = 'hidden';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <h2 className="text-2xl font-bold mb-6">Visits Report</h2>
@@ -121,6 +189,16 @@ function VisitsReport() {
                 {new Date(report.start).toLocaleDateString()} - {new Date(report.end).toLocaleDateString()}
               </div>
             </div>
+          </div>
+
+          {/* Export Button */}
+          <div className="mb-6 flex justify-end">
+            <button
+              onClick={exportToCSV}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+            >
+              📥 Export to CSV
+            </button>
           </div>
 
           {/* Locations List */}
