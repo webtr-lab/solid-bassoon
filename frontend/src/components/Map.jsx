@@ -191,7 +191,7 @@ return;
 return;
 }
 
-    const address = prompt('Enter address (optional):', searchMarker.name);
+    const address = prompt('Enter address (optional):', searchMarker.name.split(',').slice(1).join(',').trim());
     const area = prompt('Enter area/district (optional):', '');
     const contact = prompt('Enter contact name (optional):', '');
     const telephone = prompt('Enter phone number (optional):', '');
