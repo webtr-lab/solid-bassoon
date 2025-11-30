@@ -6,8 +6,8 @@ Handles analytics and reporting endpoints
 from datetime import datetime, timedelta
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required
-from app.models import SavedLocation
-from app.services.place_service import get_visit_analytics
+from app.models import SavedLocation, PlaceOfInterest
+from app.services.place_service import get_visit_analytics, find_place_for_coordinate
 import pytz
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/api/reports')
@@ -191,7 +191,10 @@ def report_visits_detailed():
             SavedLocation.timestamp <= end
         ).all()
 
-        # Group visits by location (name, lat, lon)
+        # Load all places for matching
+        places = PlaceOfInterest.query.all()
+
+        # Group visits by location (name, lat, lon) with place matching for area info
         locations_dict = {}
         for visit in visits:
             # Create a location key based on coordinates (with rounding for grouping nearby visits)
@@ -200,11 +203,18 @@ def report_visits_detailed():
             location_key = f"{lat_rounded},{lon_rounded}"
 
             if location_key not in locations_dict:
+                # Try to match to a nearby place of interest to get area information
+                matched_place = find_place_for_coordinate(
+                    visit.latitude, visit.longitude,
+                    places=places,
+                    threshold_km=0.2
+                )
+
                 locations_dict[location_key] = {
                     'name': visit.name,
                     'latitude': visit.latitude,
                     'longitude': visit.longitude,
-                    'area': '',
+                    'area': matched_place.area if matched_place else '',
                     'visits': []
                 }
 
@@ -226,7 +236,7 @@ def report_visits_detailed():
 
         # Filter by area if specified
         if area_filter:
-            results = [r for r in results if area_filter.lower() in r['area'].lower()]
+            results = [r for r in results if r['area'] and area_filter.lower() in r['area'].lower()]
 
         # Sort by visit count descending
         results.sort(key=lambda x: x['visit_count'], reverse=True)
