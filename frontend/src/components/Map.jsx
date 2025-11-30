@@ -354,7 +354,7 @@ return;
                 <strong>📍 Search Result</strong><br />
                 {searchMarker.name}
                 <div className="mt-2 pt-2 border-t">
-                  {['admin', 'manager', 'operator'].includes(currentUserRole) ? (
+                  {['admin', 'manager'].includes(currentUserRole) ? (
                     <button
                       onClick={handleSaveSearchToPOI}
                       className="w-full px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs"

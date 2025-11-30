@@ -14,7 +14,7 @@ function PinLocationButton({
   onCancel,
 }) {
   // Only show for authorized roles
-  if (!['admin', 'manager', 'operator'].includes(currentUserRole)) {
+  if (!['admin', 'manager'].includes(currentUserRole)) {
     return null;
   }
 

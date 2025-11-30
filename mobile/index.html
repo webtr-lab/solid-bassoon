@@ -360,8 +360,8 @@
                 const data = await response.json();
 
                 if (data.authenticated) {
-                    // Check if user has admin or operator role
-                    if (data.user.role === 'admin' || data.user.role === 'operator') {
+                    // Check if user has admin or manager role
+                    if (data.user.role === 'admin' || data.user.role === 'manager') {
                         isAuthenticated = true;
                         currentUser = data.user;
                         showMainCard();
@@ -408,15 +408,15 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Check if user has admin or operator role
-                    if (data.user.role === 'admin' || data.user.role === 'operator') {
+                    // Check if user has admin or manager role
+                    if (data.user.role === 'admin' || data.user.role === 'manager') {
                         isAuthenticated = true;
                         currentUser = data.user;
                         showLoginStatus('Login successful!', 'success');
                         setTimeout(showMainCard, 500);
                     } else {
                         // User doesn't have permission
-                        showLoginStatus('Access denied. Only admin and operator roles can access the mobile interface.', 'error');
+                        showLoginStatus('Access denied. Only admin and manager roles can access the mobile interface.', 'error');
                         // Logout the user
                         await fetch(`${serverUrl}/api/auth/logout`, {
                             method: 'POST',

@@ -18,7 +18,7 @@ function AddressSearchBar({
   onSelectResult,
   onSaveSearchToPOI,
 }) {
-  const canSavePOI = ['admin', 'manager', 'operator'].includes(currentUserRole);
+  const canSavePOI = ['admin', 'manager'].includes(currentUserRole);
 
   return (
     <div className="absolute top-4 left-1/2 transform -translate-x-1/2 w-80 z-[1000]">

@@ -67,14 +67,12 @@ function UserFormModal({
               className="w-full px-3 py-2 border rounded-lg"
             >
               <option value="viewer">Viewer (View only)</option>
-              <option value="operator">Operator (View + Track)</option>
               <option value="manager">Manager (View + Track + Manage)</option>
               <option value="admin">Admin (Full access)</option>
             </select>
             <p className="text-xs text-gray-500 mt-1">
               {formData.role === 'admin' && 'Full system access'}
               {formData.role === 'manager' && 'Can manage vehicles and places'}
-              {formData.role === 'operator' && 'Can view and track vehicles'}
               {formData.role === 'viewer' && 'Read-only access'}
             </p>
           </div>
