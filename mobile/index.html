@@ -636,7 +636,26 @@
             const locationName = prompt('Enter a name for this place:', 'Important Location');
             if (!locationName) return;
 
-            const address = prompt('Enter address (optional):', '');
+            // Fetch geocoded address from coordinates
+            let defaultAddress = '';
+            try {
+                const serverUrl = serverUrlInput.value.trim();
+                const response = await fetch(
+                    `${serverUrl}/api/reverse-geocode?latitude=${lastPosition.latitude}&longitude=${lastPosition.longitude}`,
+                    { credentials: 'include' }
+                );
+                if (response.ok) {
+                    const geocode = await response.json();
+                    if (geocode.display_name) {
+                        // Extract and omit place name from address (keep everything after first comma)
+                        defaultAddress = geocode.display_name.split(',').slice(1).join(',').trim();
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching address:', error);
+            }
+
+            const address = prompt('Enter address (optional):', defaultAddress);
             const area = prompt('Enter area/district (optional):', '');
             const contact = prompt('Enter contact name (optional):', '');
             const telephone = prompt('Enter phone number (optional):', '');
