@@ -41,6 +41,7 @@ function UserSearchFilter({
             <option value="all">All Roles</option>
             <option value="admin">Admin</option>
             <option value="manager">Manager</option>
+            <option value="operator">Operator</option>
             <option value="viewer">Viewer</option>
           </select>
         </div>
