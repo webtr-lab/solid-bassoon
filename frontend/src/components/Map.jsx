@@ -49,7 +49,34 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
     }
   }, [initialZoom]);
 
-  const handleMapClick = (latlng) => {
+  const validateAndSuggestArea = async (enteredArea) => {
+    if (!enteredArea || enteredArea.trim() === '') {
+      return enteredArea; // Return empty area as-is
+    }
+
+    try {
+      const response = await apiFetch('/api/places-of-interest/areas');
+      const existingAreas = response.areas || [];
+      const enteredLower = enteredArea.toLowerCase().trim();
+
+      // Check if area matches any existing area (case-insensitive)
+      const matchedArea = existingAreas.find(area => area.toLowerCase() === enteredLower);
+
+      if (matchedArea) {
+        const useExisting = window.confirm(
+          `Area "${matchedArea}" already exists.\n\nClick OK to use the existing area "${matchedArea}"\n\nClick Cancel to create new area "${enteredArea}"`
+        );
+        return useExisting ? matchedArea : enteredArea;
+      }
+
+      return enteredArea;
+    } catch (error) {
+      logger.error('Error validating area:', error);
+      return enteredArea; // Return entered area if validation fails
+    }
+  };
+
+  const handleMapClick = async (latlng) => {
     setTempPin(latlng);
 
     const locationName = prompt('Enter a name for this place:', 'Important Location');
@@ -59,7 +86,7 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
     }
 
     const address = prompt('Enter address (optional):', '');
-    const area = prompt('Enter area/district (optional):', '');
+    const areaInput = prompt('Enter area/district (optional):', '');
     const contact = prompt('Enter contact name (optional):', '');
     const telephone = prompt('Enter phone number (optional):', '');
 
@@ -75,6 +102,9 @@ function Map({ vehicles, selectedVehicle, vehicleHistory, savedLocations, places
     }
 
     const description = prompt('Add description/notes (optional):', '');
+
+    // Validate area against existing areas
+    const area = await validateAndSuggestArea(areaInput);
 
     savePlace(locationName, latlng, address, area, contact, telephone, category, description);
     setTempPin(null);
@@ -192,7 +222,7 @@ return;
 }
 
     const address = prompt('Enter address (optional):', searchMarker.name.split(',').slice(1).join(',').trim());
-    const area = prompt('Enter area/district (optional):', '');
+    const areaInput = prompt('Enter area/district (optional):', '');
     const contact = prompt('Enter contact name (optional):', '');
     const telephone = prompt('Enter phone number (optional):', '');
 
@@ -208,6 +238,9 @@ return;
     }
 
     const description = prompt('Add description/notes (optional):', '');
+
+    // Validate area against existing areas
+    const area = await validateAndSuggestArea(areaInput);
 
     try {
       await apiFetch('/api/places-of-interest', {

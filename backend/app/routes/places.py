@@ -46,6 +46,31 @@ def list_places():
         return jsonify({'error': 'Failed to list places of interest'}), 500
 
 
+@places_bp.route('/areas', methods=['GET'])
+@login_required
+def get_areas():
+    """Get all unique areas from existing places of interest"""
+    try:
+        from app.models import PlaceOfInterest
+
+        # Get all unique non-empty areas, sorted alphabetically
+        areas = db.session.query(PlaceOfInterest.area).filter(
+            PlaceOfInterest.area != '',
+            PlaceOfInterest.area.isnot(None)
+        ).distinct().order_by(PlaceOfInterest.area).all()
+
+        # Extract areas from tuples and return as list
+        area_list = sorted(list(set([row[0] for row in areas if row[0]])))
+
+        return jsonify({
+            'areas': area_list,
+            'total': len(area_list)
+        })
+    except Exception as e:
+        current_app.logger.error(f"Error fetching areas: {str(e)}")
+        return jsonify({'error': 'Failed to fetch areas'}), 500
+
+
 @places_bp.route('', methods=['POST'])
 @login_required
 @require_manager_or_admin

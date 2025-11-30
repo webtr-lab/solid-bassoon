@@ -1,15 +1,44 @@
-import React from 'react';
+import React, { useState } from 'react';
 import PropTypes from 'prop-types';
+import { apiFetch } from '../../utils/apiClient';
 
 /**
  * POIFormModal Component
  * Modal for adding/editing places of interest
  */
 function POIFormModal({ isOpen, isEditing, formData, onChange, onSubmit, onCancel, loading }) {
+  const [validatingArea, setValidatingArea] = useState(false);
+
   if (!isOpen) return null;
 
   const handleChange = (field, value) => {
     onChange({ ...formData, [field]: value });
+  };
+
+  const handleAreaBlur = async () => {
+    const areaValue = formData.area?.trim();
+    if (!areaValue) return; // Skip validation for empty area
+
+    setValidatingArea(true);
+    try {
+      const response = await apiFetch('/api/places-of-interest/areas');
+      const existingAreas = response.areas || [];
+      const areaLower = areaValue.toLowerCase();
+
+      const matchedArea = existingAreas.find(area => area.toLowerCase() === areaLower);
+      if (matchedArea) {
+        const useExisting = window.confirm(
+          `Area "${matchedArea}" already exists.\n\nClick OK to use the existing area "${matchedArea}"\n\nClick Cancel to keep your entry "${areaValue}"`
+        );
+        if (useExisting) {
+          onChange({ ...formData, area: matchedArea });
+        }
+      }
+    } catch (error) {
+      console.error('Error validating area:', error);
+    } finally {
+      setValidatingArea(false);
+    }
   };
 
   return (
@@ -35,7 +64,14 @@ function POIFormModal({ isOpen, isEditing, formData, onChange, onSubmit, onCance
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Area</label>
-            <input type="text" value={formData.area} onChange={(e) => handleChange('area', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" />
+            <input
+              type="text"
+              value={formData.area}
+              onChange={(e) => handleChange('area', e.target.value)}
+              onBlur={handleAreaBlur}
+              disabled={validatingArea}
+              className="w-full px-3 py-2 border rounded-lg text-sm disabled:bg-gray-100"
+            />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>

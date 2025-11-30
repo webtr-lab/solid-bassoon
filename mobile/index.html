@@ -622,6 +622,35 @@
             updateIntervalSelect.disabled = false;
         }
         
+        async function validateAndSuggestArea(enteredArea, serverUrl) {
+            if (!enteredArea || enteredArea.trim() === '') {
+                return enteredArea;
+            }
+
+            try {
+                const response = await fetch(`${serverUrl}/api/places-of-interest/areas`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const result = await response.json();
+                    const existingAreas = result.areas || [];
+                    const enteredLower = enteredArea.toLowerCase().trim();
+
+                    const matchedArea = existingAreas.find(area => area.toLowerCase() === enteredLower);
+                    if (matchedArea) {
+                        const useExisting = window.confirm(
+                            `Area "${matchedArea}" already exists.\n\nClick OK to use the existing area "${matchedArea}"\n\nClick Cancel to create new area "${enteredArea}"`
+                        );
+                        return useExisting ? matchedArea : enteredArea;
+                    }
+                }
+            } catch (error) {
+                console.error('Error validating area:', error);
+            }
+
+            return enteredArea;
+        }
+
         async function saveCurrentLocation() {
             if (!lastPosition) {
                 showStatus('No location data available to save', 'error');
@@ -638,8 +667,8 @@
 
             // Fetch geocoded address from coordinates
             let defaultAddress = '';
+            const serverUrl = serverUrlInput.value.trim();
             try {
-                const serverUrl = serverUrlInput.value.trim();
                 const response = await fetch(
                     `${serverUrl}/api/reverse-geocode?latitude=${lastPosition.latitude}&longitude=${lastPosition.longitude}`,
                     { credentials: 'include' }
@@ -656,7 +685,8 @@
             }
 
             const address = prompt('Enter address (optional):', defaultAddress);
-            const area = prompt('Enter area/district (optional):', '');
+            const areaInput = prompt('Enter area/district (optional):', '');
+            const area = await validateAndSuggestArea(areaInput, serverUrl);
             const contact = prompt('Enter contact name (optional):', '');
             const telephone = prompt('Enter phone number (optional):', '');
 
