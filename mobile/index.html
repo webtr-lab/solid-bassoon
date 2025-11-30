@@ -807,8 +807,6 @@
 
             const description = prompt('Add description/notes (optional):', '');
 
-            const serverUrl = serverUrlInput.value.trim();
-
             try {
                 const response = await fetch(`${serverUrl}/api/places-of-interest`, {
                     method: 'POST',
