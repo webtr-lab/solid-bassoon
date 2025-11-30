@@ -204,6 +204,12 @@
             <button id="loginBtn" class="btn btn-primary">Login</button>
 
             <div id="loginStatus" class="status hidden"></div>
+
+            <div id="debugInfo" style="margin-top: 15px; padding: 10px; background: #f3f4f6; border-radius: 8px; font-size: 11px; color: #6b7280; border: 1px solid #e5e7eb;">
+                <strong>Debug Info:</strong><br>
+                Detected Server URL: <span id="detectedUrl" style="color: #1e40af; font-family: monospace; font-weight: 500;"></span><br>
+                <small>Check browser console (F12) for detailed logs</small>
+            </div>
         </div>
 
         <div id="mainCard" class="card hidden">
@@ -315,18 +321,28 @@
         const statsContainer = document.getElementById('statsContainer');
 
         // Set default server URL based on environment
+        let detectedUrl;
         if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
             // For production/network, use HTTPS if available
             if (window.location.protocol === 'https:') {
                 // When on HTTPS (port 8443), backend API is at standard HTTPS port 443
-                serverUrlInput.value = `https://${window.location.hostname}`;
+                detectedUrl = `https://${window.location.hostname}`;
+                serverUrlInput.value = detectedUrl;
             } else {
                 // Fallback to HTTP
-                serverUrlInput.value = `http://${window.location.hostname}:5000`;
+                detectedUrl = `http://${window.location.hostname}:5000`;
+                serverUrlInput.value = detectedUrl;
             }
         } else {
-            serverUrlInput.value = `http://${window.location.hostname}:5000`;
+            detectedUrl = `http://${window.location.hostname}:5000`;
+            serverUrlInput.value = detectedUrl;
         }
+
+        // Display detected URL in debug info
+        document.getElementById('detectedUrl').textContent = detectedUrl;
+        console.log(`[Mobile Dashboard] Detected Server URL: ${detectedUrl}`);
+        console.log(`[Mobile Dashboard] Location Protocol: ${window.location.protocol}`);
+        console.log(`[Mobile Dashboard] Location Hostname: ${window.location.hostname}`);
 
         function showLoginStatus(message, type) {
             loginStatus.textContent = message;
@@ -397,19 +413,24 @@
             const username = usernameInput.value.trim();
             const password = passwordInput.value;
 
+            console.log(`[Login] Attempting login with URL: ${serverUrl} and username: ${username}`);
+
             if (!serverUrl) {
                 showLoginStatus('Please enter server URL', 'error');
+                console.error('[Login] Server URL is empty');
                 return;
             }
 
             if (!username || !password) {
                 showLoginStatus('Please enter username and password', 'error');
+                console.error('[Login] Username or password missing');
                 return;
             }
 
             // Show loading state
             showLoginStatus('Logging in...', 'info');
             loginBtn.disabled = true;
+            console.log(`[Login] Initiating login process for user: ${username}`);
 
             try {
                 // Sync server time with timeout
@@ -419,10 +440,13 @@
                 showLoginStatus('Authenticating...', 'info');
 
                 // Login with timeout
+                const loginUrl = `${serverUrl}/api/auth/login`;
+                console.log(`[Login] Sending login request to: ${loginUrl}`);
+
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-                const response = await fetch(`${serverUrl}/api/auth/login`, {
+                const response = await fetch(loginUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -433,8 +457,10 @@
                 });
 
                 clearTimeout(timeoutId);
+                console.log(`[Login] Response received: ${response.status} ${response.statusText}`);
 
                 const data = await response.json();
+                console.log(`[Login] Response data:`, data);
 
                 if (response.ok) {
                     // Check if user has admin or operator role
