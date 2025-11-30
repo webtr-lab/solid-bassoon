@@ -335,7 +335,20 @@
 
         async function syncServerTime(serverUrl) {
             try {
-                const response = await fetch(`${serverUrl}/api/time`);
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+                const response = await fetch(`${serverUrl}/api/time`, {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    console.warn(`Time sync returned status ${response.status}`);
+                    timeOffset = 0;
+                    return;
+                }
+
                 const data = await response.json();
                 const serverTime = new Date(data.timestamp).getTime();
                 const clientTime = Date.now();
@@ -393,17 +406,32 @@
                 return;
             }
 
-            await syncServerTime(serverUrl);
+            // Show loading state
+            showLoginStatus('Logging in...', 'info');
+            loginBtn.disabled = true;
 
             try {
+                // Sync server time with timeout
+                showLoginStatus('Syncing server time...', 'info');
+                await syncServerTime(serverUrl);
+
+                showLoginStatus('Authenticating...', 'info');
+
+                // Login with timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
                 const response = await fetch(`${serverUrl}/api/auth/login`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     credentials: 'include',
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ username, password }),
+                    signal: controller.signal
                 });
+
+                clearTimeout(timeoutId);
 
                 const data = await response.json();
 
@@ -413,22 +441,32 @@
                         isAuthenticated = true;
                         currentUser = data.user;
                         showLoginStatus('Login successful!', 'success');
+                        console.log(`User ${data.user.username} (${data.user.role}) logged in successfully`);
                         setTimeout(showMainCard, 500);
                     } else {
                         // User doesn't have permission
-                        showLoginStatus('Access denied. Only admin and operator roles can access the mobile interface.', 'error');
+                        showLoginStatus(`Access denied. User role '${data.user.role}' cannot access mobile interface. Required: admin or operator`, 'error');
+                        console.warn(`Login attempt with insufficient permissions. User role: ${data.user.role}`);
                         // Logout the user
                         await fetch(`${serverUrl}/api/auth/logout`, {
                             method: 'POST',
                             credentials: 'include'
                         });
+                        loginBtn.disabled = false;
                     }
                 } else {
-                    showLoginStatus(data.error || 'Login failed', 'error');
+                    showLoginStatus(data.error || `Login failed (${response.status})`, 'error');
+                    console.error('Login response:', response.status, data);
+                    loginBtn.disabled = false;
                 }
             } catch (error) {
-                showLoginStatus('Connection error. Check server URL.', 'error');
+                if (error.name === 'AbortError') {
+                    showLoginStatus('Request timeout. Check your connection.', 'error');
+                } else {
+                    showLoginStatus(`Error: ${error.message || 'Connection error. Check server URL.'}`, 'error');
+                }
                 console.error('Login error:', error);
+                loginBtn.disabled = false;
             }
         }
 
