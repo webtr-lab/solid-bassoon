@@ -32,10 +32,16 @@ services:
       FLASK_ENV: ${FLASK_ENV}
       CORS_ORIGINS: ${CORS_ORIGINS}
       NOMINATIM_URL: ${NOMINATIM_URL}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      FRONTEND_URL: ${FRONTEND_URL}
     volumes:
       - ./backups:/app/backups:z
       - ./logs:/app/logs:z
       - ./scripts:/app/scripts:ro
+      - ./secrets:/app/secrets:z
     depends_on:
       db:
         condition: service_healthy

@@ -54,5 +54,9 @@ docker-compose.override.yml
 *.key
 *.crt
 
+# Secrets Management - NEVER COMMIT
+secrets/
+!secrets/.gitkeep
+
 # Claude Code Instance Settings
 .claude/settings.local.json

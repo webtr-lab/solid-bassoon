@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import logger from '../utils/logger';
 import { apiFetch, getErrorMessage } from '../utils/apiClient';
+import ForgotPasswordModal from './ForgotPasswordModal';
 
 function Login({ onLoginSuccess }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -9,6 +10,7 @@ function Login({ onLoginSuccess }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -117,6 +119,18 @@ function Login({ onLoginSuccess }) {
           </button>
         </form>
 
+        {isLogin && (
+          <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={() => setIsForgotPasswordOpen(true)}
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+            >
+              Forgot password?
+            </button>
+          </div>
+        )}
+
         <div className="mt-6 text-center">
           <button
             onClick={() => {
@@ -130,6 +144,11 @@ function Login({ onLoginSuccess }) {
           </button>
         </div>
       </div>
+
+      <ForgotPasswordModal
+        isOpen={isForgotPasswordOpen}
+        onClose={() => setIsForgotPasswordOpen(false)}
+      />
     </div>
   );
 }

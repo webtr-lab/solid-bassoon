@@ -6,12 +6,15 @@ Handles user registration, login, logout, password changes, and auth checks
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required, login_user, logout_user, current_user
 from flask_bcrypt import Bcrypt
-from app.models import db, User
+from app.models import db, User, PasswordResetToken
 from app.security import (
     ValidationError, validate_email, validate_password_strength,
     login_rate_limiter, log_audit_event
 )
 from app.limiter import limiter
+from app.services.email_service import send_password_reset_email, send_password_changed_email, send_registration_confirmation_email
+from datetime import datetime, timedelta
+import os
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
@@ -72,6 +75,21 @@ def register():
         db.session.commit()
 
         current_app.logger.info(f"New user registered: {user.username} (role: {user.role})")
+
+        # Send registration confirmation email
+        login_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/login"
+        send_registration_confirmation_email(user, login_url)
+
+        log_audit_event(
+            user_id=user.id,
+            action='user_register',
+            resource='user',
+            status='success',
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent', ''),
+            details='New user registration'
+        )
+
         return jsonify({'message': 'User registered successfully'}), 201
 
     except ValidationError as e:
@@ -218,3 +236,122 @@ def change_password():
         db.session.rollback()
         current_app.logger.error(f"Password change error: {str(e)}")
         return jsonify({'error': 'Password change failed'}), 500
+
+
+@auth_bp.route('/forgot-password', methods=['POST'])
+@limiter.limit("5 per hour")
+def forgot_password():
+    """Request a password reset token"""
+    try:
+        data = request.json
+
+        if not data.get('email'):
+            return jsonify({'error': 'Email is required'}), 400
+
+        user = User.query.filter_by(email=data['email']).first()
+
+        # Always return success message for security (don't reveal if email exists)
+        if not user:
+            current_app.logger.warning(f"Password reset requested for non-existent email: {data['email']}")
+            return jsonify({
+                'message': 'If an account exists with this email, you will receive a password reset link'
+            }), 200
+
+        # Invalidate any existing tokens for this user
+        PasswordResetToken.query.filter_by(user_id=user.id, is_used=False).update({'is_used': True})
+        db.session.commit()
+
+        # Generate new reset token (valid for 1 hour)
+        token = PasswordResetToken.generate_token()
+        reset_token_obj = PasswordResetToken(
+            user_id=user.id,
+            token=token,
+            expires_at=datetime.utcnow() + timedelta(hours=1)
+        )
+        db.session.add(reset_token_obj)
+        db.session.commit()
+
+        # Build reset URL (frontend will handle this)
+        reset_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/reset-password?token={token}"
+
+        # Send email
+        send_password_reset_email(user, token, reset_url)
+
+        log_audit_event(
+            user_id=user.id,
+            action='forgot_password',
+            resource='user',
+            status='success',
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent', ''),
+            details='Password reset requested'
+        )
+
+        return jsonify({
+            'message': 'If an account exists with this email, you will receive a password reset link'
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Forgot password error: {str(e)}")
+        return jsonify({'error': 'Password reset request failed'}), 500
+
+
+@auth_bp.route('/reset-password', methods=['POST'])
+@limiter.limit("10 per hour")
+def reset_password():
+    """Reset password using a valid reset token"""
+    try:
+        data = request.json
+
+        if not data.get('token') or not data.get('new_password'):
+            return jsonify({'error': 'Token and new password are required'}), 400
+
+        # Find the reset token
+        reset_token = PasswordResetToken.query.filter_by(token=data['token']).first()
+
+        if not reset_token or not reset_token.is_valid():
+            return jsonify({'error': 'Invalid or expired reset token'}), 401
+
+        user = reset_token.user
+
+        # Validate new password strength
+        try:
+            validate_password_strength(data['new_password'])
+        except ValidationError as e:
+            return jsonify({'error': str(e)}), 400
+
+        # Ensure new password is different from current password
+        bcrypt = get_bcrypt()
+        if bcrypt.check_password_hash(user.password_hash, data['new_password']):
+            return jsonify({'error': 'New password must be different from current password'}), 400
+
+        # Update password
+        user.password_hash = bcrypt.generate_password_hash(data['new_password']).decode('utf-8')
+        user.must_change_password = False
+        reset_token.is_used = True
+
+        db.session.commit()
+
+        current_app.logger.info(f"Password reset successfully for user: {user.username}")
+
+        # Send confirmation email
+        send_password_changed_email(user)
+
+        log_audit_event(
+            user_id=user.id,
+            action='reset_password',
+            resource='user',
+            status='success',
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent', ''),
+            details='Password reset via token'
+        )
+
+        return jsonify({'message': 'Password reset successfully'}), 200
+
+    except ValidationError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Password reset error: {str(e)}")
+        return jsonify({'error': 'Password reset failed'}), 500

@@ -25,6 +25,7 @@ from app.routes.reports import reports_bp
 from app.routes.backups import backups_bp
 from app.routes.users import users_bp
 from app.services.backup_service import automatic_backup
+from app.services.email_service import init_email
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import math
@@ -57,6 +58,7 @@ bcrypt = Bcrypt(app)
 limiter.init_app(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'auth.login'
+init_email(app)
 
 # Initialize WebSocket support
 socketio = SocketIO(

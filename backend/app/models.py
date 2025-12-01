@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from datetime import datetime
+from datetime import datetime, timedelta
+import secrets
 
 db = SQLAlchemy()
 
@@ -92,3 +93,32 @@ class AuditLog(db.Model):
 
     def __repr__(self):
         return f'<AuditLog {self.action} on {self.resource}#{self.resource_id} by user#{self.user_id} at {self.timestamp}>'
+
+
+class PasswordResetToken(db.Model):
+    """
+    Password reset tokens for secure password recovery
+    Tokens expire after 1 hour
+    """
+    __tablename__ = 'password_reset_tokens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    token = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    is_used = db.Column(db.Boolean, default=False)
+
+    user = db.relationship('User', backref=db.backref('reset_tokens', lazy=True))
+
+    @staticmethod
+    def generate_token():
+        """Generate a secure random token"""
+        return secrets.token_urlsafe(32)
+
+    def is_valid(self):
+        """Check if token is still valid"""
+        return not self.is_used and datetime.utcnow() < self.expires_at
+
+    def __repr__(self):
+        return f'<PasswordResetToken for user#{self.user_id}>'

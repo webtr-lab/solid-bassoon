@@ -13,6 +13,7 @@ import tempfile
 from datetime import datetime
 from flask import current_app
 from app.models import db
+from app.services.secret_manager import SecretManager
 
 
 BACKUP_DIR = '/app/backups'
@@ -196,11 +197,15 @@ def decrypt_backup(encrypted_backup_path):
         Exception: If decryption fails or passphrase not set
     """
     try:
-        # Get encryption passphrase from environment
-        encryption_passphrase = os.environ.get('BACKUP_ENCRYPTION_PASSPHRASE', '')
+        # Get encryption passphrase from secret manager (or fallback to environment for compatibility)
+        try:
+            encryption_passphrase = SecretManager.get_secret('backup_encryption_passphrase')
+        except KeyError:
+            # Fallback to environment variable for backward compatibility
+            encryption_passphrase = os.environ.get('BACKUP_ENCRYPTION_PASSPHRASE', '')
 
         if not encryption_passphrase:
-            raise Exception("Backup encryption passphrase not configured (BACKUP_ENCRYPTION_PASSPHRASE)")
+            raise Exception("Backup encryption passphrase not configured. Set via SecretManager or BACKUP_ENCRYPTION_PASSPHRASE environment variable")
 
         # Check if GPG is available
         if subprocess.run(['which', 'gpg'], capture_output=True).returncode != 0:
