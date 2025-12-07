@@ -29,6 +29,13 @@ if [ -f "${BASE_DIR}/.env" ]; then
     set -a
 fi
 
+# Load .backup-secrets if it exists (overrides .env for sensitive credentials)
+if [ -f "${BASE_DIR}/.backup-secrets" ]; then
+    set +a
+    source "${BASE_DIR}/.backup-secrets"
+    set -a
+fi
+
 # Database settings
 DB_USER="${POSTGRES_USER:-mapsadmin}"
 DB_NAME="${POSTGRES_DB:-maps_tracker}"

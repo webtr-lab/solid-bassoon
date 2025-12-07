@@ -55,6 +55,7 @@ docker-compose.override.yml
 *.crt
 
 # Secrets Management - NEVER COMMIT
+.backup-secrets
 secrets/
 !secrets/.gitkeep
 

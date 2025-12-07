@@ -44,9 +44,23 @@ FULL_BACKUP_DAY=0           # Sunday (0=Sunday, 1=Monday, etc.)
 
 # Load .env if it exists for environment variables
 if [ -f "${BASE_DIR}/.env" ]; then
-    set +a
-    source "${BASE_DIR}/.env"
     set -a
+    source "${BASE_DIR}/.env"
+    set +a
+fi
+
+# Load .backup-secrets if it exists (overrides .env for sensitive credentials)
+if [ -f "${BASE_DIR}/.backup-secrets" ]; then
+    # Verify file permissions (should be 600 for security)
+    local perms=$(stat -f "%OLp" "${BASE_DIR}/.backup-secrets" 2>/dev/null | tail -c 4 || stat -c "%a" "${BASE_DIR}/.backup-secrets" 2>/dev/null)
+    if [ "${perms}" != "600" ] && [ "${perms}" != "-rw-------" ]; then
+        log_warn "⚠️  WARNING: .backup-secrets has insecure permissions (${perms})"
+        log_warn "⚠️  Should be 600. Fix with: chmod 600 ${BASE_DIR}/.backup-secrets"
+    fi
+
+    set -a
+    source "${BASE_DIR}/.backup-secrets"
+    set +a
 fi
 
 # Database settings (from .env or with defaults)
@@ -59,9 +73,15 @@ EMAIL_ENABLED="${BACKUP_EMAIL_ENABLED:-true}"
 EMAIL_RECIPIENT="${BACKUP_EMAIL:-admin@example.com}"
 EMAIL_SUBJECT_PREFIX="[Maps Tracker Backup]"
 
-# Encryption settings
-ENCRYPTION_ENABLED="${BACKUP_ENCRYPTION_ENABLED:-true}"
+# Encryption settings - MANDATORY (encryption is always enabled)
 ENCRYPTION_PASSPHRASE="${BACKUP_ENCRYPTION_PASSPHRASE:-}"
+
+# B2 Cloud Backup settings (from .env or with defaults)
+B2_ENABLED="${B2_ENABLED:-false}"
+B2_ACCOUNT_ID="${B2_ACCOUNT_ID:-}"
+B2_APPLICATION_KEY="${B2_APPLICATION_KEY:-}"
+B2_BUCKET_NAME="${B2_BUCKET_NAME:-maps-tracker-backups}"
+B2_SCRIPT="${SCRIPT_DIR}/b2-backup.sh"
 
 # Colors
 RED='\033[0;31m'
@@ -196,22 +216,18 @@ backup_configuration_files() {
 encrypt_backup() {
     local backup_file=$1
 
-    # Check if encryption is disabled
-    if [ "$ENCRYPTION_ENABLED" != "true" ]; then
-        log_info "Encryption disabled - skipping encryption"
-        return 0
-    fi
-
-    # Check if passphrase is set
+    # Check if passphrase is set - REQUIRED
     if [ -z "$ENCRYPTION_PASSPHRASE" ]; then
-        log_warn "Encryption enabled but BACKUP_ENCRYPTION_PASSPHRASE not set - skipping encryption"
-        return 0
+        log_error "CRITICAL: BACKUP_ENCRYPTION_PASSPHRASE not set - encryption is mandatory"
+        log_error "Set BACKUP_ENCRYPTION_PASSPHRASE in .env file before running backups"
+        return 1
     fi
 
-    # Check if GPG is available
+    # Check if GPG is available - REQUIRED
     if ! command -v gpg &> /dev/null; then
-        log_warn "GPG not available - backup will not be encrypted"
-        return 0
+        log_error "CRITICAL: GPG not available - encryption is mandatory but gpg command not found"
+        log_error "Install gnupg: apt-get install gnupg"
+        return 1
     fi
 
     log_info "Encrypting backup with AES-256..."
@@ -299,7 +315,6 @@ create_metadata() {
     TABLE_COUNT="${table_count}" \
     DATABASE="${DB_NAME}" \
     POSTGRES_VERSION="${pg_version}" \
-    ENCRYPTION_ENABLED="${ENCRYPTION_ENABLED}" \
     METADATA_FILE="${metadata_file}" \
     python3 <<'PYEOF'
 import json
@@ -316,7 +331,7 @@ metadata = {
     "database": os.environ.get('DATABASE', ''),
     "postgres_version": os.environ.get('POSTGRES_VERSION', 'unknown'),
     "compressed": False,
-    "encrypted": os.environ.get('ENCRYPTION_ENABLED', '') == 'true',
+    "encrypted": True,  # Encryption is MANDATORY
     "verified": False
 }
 
@@ -478,18 +493,15 @@ create_full_backup() {
     # Backup configuration files (.env, SSL certs, etc.)
     backup_configuration_files "full"
 
-    # Encrypt backup if enabled
-    ENCRYPTED_FILE="${backup_path}"
-    if [ "$ENCRYPTION_ENABLED" == "true" ] && [ -n "$ENCRYPTION_PASSPHRASE" ]; then
-        encrypt_backup "${backup_path}"
-        if [ $? -eq 0 ] && [ -f "${backup_path}.gpg" ]; then
-            # Update to point to encrypted file only if it exists
-            ENCRYPTED_FILE="${backup_path}.gpg"
-            log_info "Using encrypted backup file: ${ENCRYPTED_FILE}"
-        else
-            # Encryption failed or skipped, use unencrypted file
-            log_warn "Encryption not available, using unencrypted backup"
-        fi
+    # Encrypt backup - MANDATORY (all backups must be encrypted)
+    encrypt_backup "${backup_path}"
+    if [ $? -eq 0 ] && [ -f "${backup_path}.gpg" ]; then
+        ENCRYPTED_FILE="${backup_path}.gpg"
+        log_info "✓ Backup encrypted with AES-256"
+    else
+        log_error "Backup encryption failed - aborting backup"
+        rm -f "${backup_path}"
+        return 1
     fi
 
     # Create checksum (SHA256 - stronger than MD5) - on final file (encrypted or not)
@@ -593,18 +605,15 @@ create_daily_backup() {
     # Backup configuration files (.env, SSL certs, etc.)
     backup_configuration_files "daily"
 
-    # Encrypt backup if enabled
-    ENCRYPTED_FILE="${backup_path}"
-    if [ "$ENCRYPTION_ENABLED" == "true" ] && [ -n "$ENCRYPTION_PASSPHRASE" ]; then
-        encrypt_backup "${backup_path}"
-        if [ $? -eq 0 ] && [ -f "${backup_path}.gpg" ]; then
-            # Update to point to encrypted file only if it exists
-            ENCRYPTED_FILE="${backup_path}.gpg"
-            log_info "Using encrypted backup file: ${ENCRYPTED_FILE}"
-        else
-            # Encryption failed or skipped, use unencrypted file
-            log_warn "Encryption not available, using unencrypted backup"
-        fi
+    # Encrypt backup - MANDATORY (all backups must be encrypted)
+    encrypt_backup "${backup_path}"
+    if [ $? -eq 0 ] && [ -f "${backup_path}.gpg" ]; then
+        ENCRYPTED_FILE="${backup_path}.gpg"
+        log_info "✓ Backup encrypted with AES-256"
+    else
+        log_error "Backup encryption failed - aborting backup"
+        rm -f "${backup_path}"
+        return 1
     fi
 
     # Create checksum (SHA256 - stronger than MD5) - on final file (encrypted or not)
@@ -868,6 +877,47 @@ PYTHON_EOF
     return 1
 }
 
+# Sync backups to B2 cloud storage
+sync_to_b2() {
+    if [ "$B2_ENABLED" != "true" ]; then
+        log_info "B2 sync disabled (B2_ENABLED=false)"
+        return 0
+    fi
+
+    if [ ! -f "$B2_SCRIPT" ]; then
+        log_warn "B2 backup script not found: $B2_SCRIPT"
+        return 1
+    fi
+
+    if [ -z "$B2_ACCOUNT_ID" ] || [ -z "$B2_APPLICATION_KEY" ]; then
+        log_warn "B2 credentials not configured (B2_ACCOUNT_ID or B2_APPLICATION_KEY missing)"
+        return 1
+    fi
+
+    log_info "Syncing backups to Backblaze B2..."
+
+    # Run b2-backup.sh inside Docker container where b2 CLI is installed
+    # Pass B2 and encryption environment variables to the container
+    docker compose exec -T \
+        -e B2_ACCOUNT_ID="$B2_ACCOUNT_ID" \
+        -e B2_APPLICATION_KEY_ID="$B2_ACCOUNT_ID" \
+        -e B2_APPLICATION_KEY="$B2_APPLICATION_KEY" \
+        -e B2_BUCKET_NAME="$B2_BUCKET_NAME" \
+        -e B2_RETENTION_DAYS="$B2_RETENTION_DAYS" \
+        -e B2_CLEANUP_ENABLED="$B2_CLEANUP_ENABLED" \
+        backend bash /app/scripts/backup/b2-backup.sh --sync >> "${BACKUP_LOG}" 2>&1
+
+    local exit_code=$?
+
+    if [ $exit_code -eq 0 ]; then
+        log_info "✓ B2 sync completed successfully"
+        return 0
+    else
+        log_error "✗ B2 sync failed (exit code: $exit_code)"
+        return 1
+    fi
+}
+
 # Main function
 main() {
     local command=${1:-"--help"}
@@ -882,6 +932,8 @@ main() {
                 local backup_size=$(get_file_size "${backup_file}" || echo "0")
                 local size_human=$(numfmt --to=iec-i --suffix=B ${backup_size} 2>/dev/null || echo "${backup_size} bytes")
                 send_email_notification "success" "FULL" "$backup_file" "$size_human"
+                # Sync to B2 after successful backup
+                sync_to_b2
             else
                 send_email_notification "failure" "FULL" "unknown" "Full backup failed"
             fi
@@ -892,6 +944,8 @@ main() {
                 local backup_size=$(get_file_size "${backup_file}" || echo "0")
                 local size_human=$(numfmt --to=iec-i --suffix=B ${backup_size} 2>/dev/null || echo "${backup_size} bytes")
                 send_email_notification "success" "DAILY" "$backup_file" "$size_human"
+                # Sync to B2 after successful backup
+                sync_to_b2
             else
                 send_email_notification "failure" "DAILY" "unknown" "Daily backup failed"
             fi
@@ -907,6 +961,8 @@ main() {
                 local backup_size=$(get_file_size "${backup_file}" || echo "0")
                 local size_human=$(numfmt --to=iec-i --suffix=B ${backup_size} 2>/dev/null || echo "${backup_size} bytes")
                 send_email_notification "success" "$backup_type" "$backup_file" "$size_human"
+                # Sync to B2 after successful backup
+                sync_to_b2
             else
                 send_email_notification "failure" "AUTO" "unknown" "Auto backup failed"
             fi
@@ -930,19 +986,44 @@ main() {
         --list)
             list_backups
             ;;
+        --b2-sync)
+            sync_to_b2
+            ;;
+        --b2-list)
+            if [ -f "$B2_SCRIPT" ]; then
+                docker compose exec -T -e B2_ACCOUNT_ID="$B2_ACCOUNT_ID" -e B2_APPLICATION_KEY_ID="$B2_ACCOUNT_ID" -e B2_APPLICATION_KEY="$B2_APPLICATION_KEY" -e B2_BUCKET_NAME="$B2_BUCKET_NAME" backend bash /app/scripts/backup/b2-backup.sh --list
+            else
+                log_error "B2 backup script not found: $B2_SCRIPT"
+                exit 1
+            fi
+            ;;
+        --b2-verify)
+            if [ -f "$B2_SCRIPT" ]; then
+                docker compose exec -T -e B2_ACCOUNT_ID="$B2_ACCOUNT_ID" -e B2_APPLICATION_KEY_ID="$B2_ACCOUNT_ID" -e B2_APPLICATION_KEY="$B2_APPLICATION_KEY" -e B2_BUCKET_NAME="$B2_BUCKET_NAME" backend bash /app/scripts/backup/b2-backup.sh --verify
+            else
+                log_error "B2 backup script not found: $B2_SCRIPT"
+                exit 1
+            fi
+            ;;
         --help)
             cat <<EOF
 Maps Tracker Backup Manager
 
 Usage: $0 [COMMAND]
 
-Commands:
+Local Backup Commands:
   --full        Create a full backup
   --daily       Create a daily backup
   --auto        Auto-decide (full on Sunday, daily otherwise)
   --cleanup     Remove backups older than ${RETENTION_DAYS} days
   --archive     Compress backups older than ${ARCHIVE_AFTER_DAYS} days
-  --list        List all backups
+  --list        List all local backups
+
+Cloud Backup (Backblaze B2):
+  --b2-sync     Sync local backups to B2 bucket
+  --b2-list     List backups in B2 bucket
+  --b2-verify   Verify uploaded backups in B2
+
   --help        Show this help message
 
 Backup Structure:
@@ -952,16 +1033,27 @@ Backup Structure:
   backups/archive/            - Compressed old backups
 
 Retention Policy:
-  - Keep all backups for ${RETENTION_DAYS} days (6 months)
+  - Local: Keep all backups for ${RETENTION_DAYS} days (6 months)
   - Compress backups older than ${ARCHIVE_AFTER_DAYS} days
   - Full backups: Every Sunday at 2 AM
   - Daily backups: Every day at 2 AM
+  - Cloud: Auto-sync after each backup (if B2_ENABLED=true)
 
 Examples:
-  $0 --auto              # Recommended for cron jobs
+  $0 --auto              # Recommended for cron jobs (creates backup + syncs to B2)
   $0 --full              # Force full backup now
-  $0 --list              # See all backups
-  $0 --cleanup           # Remove old backups
+  $0 --list              # See all local backups
+  $0 --b2-list           # See all backups in B2
+  $0 --cleanup           # Remove old local backups
+
+Configuration:
+  B2 backups are configured in .env file:
+  - B2_ENABLED              Enable/disable B2 syncing (true/false)
+  - B2_ACCOUNT_ID           Backblaze account ID
+  - B2_APPLICATION_KEY      Backblaze application key
+  - B2_BUCKET_NAME          B2 bucket name
+  - B2_RETENTION_DAYS       Days to retain backups (default: 180)
+  - B2_CLEANUP_ENABLED      Auto-cleanup old backups (default: true)
 
 EOF
             ;;
