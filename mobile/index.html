@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Devnan Tracker - Mobile</title>
+    <title>Store Location Tracker</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -18,12 +18,12 @@
             padding: 20px;
             color: white;
         }
-        
+
         .container {
             max-width: 500px;
             margin: 0 auto;
         }
-        
+
         .card {
             background: rgba(255, 255, 255, 0.95);
             border-radius: 20px;
@@ -32,24 +32,24 @@
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
             color: #333;
         }
-        
+
         h1 {
             text-align: center;
             margin-bottom: 10px;
             font-size: 28px;
         }
-        
+
         .subtitle {
             text-align: center;
             opacity: 0.9;
             margin-bottom: 30px;
             font-size: 14px;
         }
-        
+
         .form-group {
             margin-bottom: 20px;
         }
-        
+
         label {
             display: block;
             margin-bottom: 8px;
@@ -57,7 +57,7 @@
             font-size: 14px;
             color: #555;
         }
-        
+
         select, input {
             width: 100%;
             padding: 14px;
@@ -67,12 +67,12 @@
             transition: all 0.3s;
             background: white;
         }
-        
+
         select:focus, input:focus {
             outline: none;
             border-color: #667eea;
         }
-        
+
         .btn {
             width: 100%;
             padding: 16px;
@@ -84,31 +84,31 @@
             transition: all 0.3s;
             margin-bottom: 12px;
         }
-        
+
         .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
         }
-        
+
         .btn-primary:active {
             transform: scale(0.98);
         }
-        
-        .btn-danger {
-            background: #ef4444;
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
             color: white;
         }
-        
-        .btn-save {
+
+        .btn-warning {
             background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
             color: white;
         }
-        
+
         .btn:disabled {
             opacity: 0.6;
             cursor: not-allowed;
         }
-        
+
         .status {
             padding: 15px;
             border-radius: 12px;
@@ -117,53 +117,27 @@
             text-align: center;
             font-weight: 500;
         }
-        
+
         .status.success {
             background: #d1fae5;
             color: #065f46;
         }
-        
+
         .status.error {
             background: #fee2e2;
             color: #991b1b;
         }
-        
+
         .status.info {
             background: #dbeafe;
             color: #1e40af;
         }
-        
-        .stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-top: 20px;
-        }
-        
-        .stat-box {
-            background: #f9fafb;
-            padding: 15px;
-            border-radius: 12px;
-            text-align: center;
-        }
-        
-        .stat-label {
-            font-size: 12px;
-            color: #6b7280;
-            margin-bottom: 5px;
-        }
-        
-        .stat-value {
-            font-size: 24px;
-            font-weight: 700;
-            color: #667eea;
-        }
-        
+
         .location-info {
             background: #f0f9ff;
             padding: 15px;
             border-radius: 12px;
-            margin-top: 15px;
+            margin-bottom: 15px;
             font-size: 13px;
             color: #1e40af;
         }
@@ -171,17 +145,56 @@
         .location-info div {
             margin-bottom: 5px;
         }
-        
+
         .hidden {
             display: none;
+        }
+
+        .section-header {
+            font-size: 16px;
+            font-weight: 700;
+            color: #374151;
+            margin: 25px 0 15px 0;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .instruction {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #92400e;
+            margin-bottom: 20px;
+        }
+
+        .gps-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #6b7280;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        .gps-indicator.active {
+            background: #10b981;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📍 Devnan Tracker</h1>
-        <p class="subtitle">Mobile Location Sender</p>
+        <h1>📍 Store Location Tracker</h1>
+        <p class="subtitle">Pin business locations on the map</p>
 
+        <!-- Login Card -->
         <div id="loginCard" class="card">
             <h2 style="margin-bottom: 20px; text-align: center;">Login Required</h2>
 
@@ -212,6 +225,7 @@
             </div>
         </div>
 
+        <!-- Main Card -->
         <div id="mainCard" class="card hidden">
             <div class="form-group">
                 <label for="serverUrlMain">Server URL</label>
@@ -219,28 +233,6 @@
                 <small style="color: #6b7280; font-size: 12px; margin-top: 4px; display: block;">Change server without logging out</small>
             </div>
 
-            <div class="form-group">
-                <label for="vehicleSelect">Select Vehicle</label>
-                <select id="vehicleSelect">
-                    <option value="">-- Choose Vehicle --</option>
-                    <option value="device_1">Vehicle 1</option>
-                    <option value="device_2">Vehicle 2</option>
-                    <option value="device_3">Vehicle 3</option>
-                    <option value="device_4">Vehicle 4</option>
-                    <option value="device_5">Vehicle 5</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label for="updateInterval">Update Interval</label>
-                <select id="updateInterval">
-                    <option value="5">Every 5 seconds</option>
-                    <option value="10" selected>Every 10 seconds</option>
-                    <option value="30">Every 30 seconds</option>
-                    <option value="60">Every 1 minute</option>
-                </select>
-            </div>
-            
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                 <div style="font-size: 14px; color: #666;">
                     <strong>Logged in as:</strong> <span id="currentUser">--</span>
@@ -248,60 +240,51 @@
                 <button id="logoutBtn" class="btn" style="padding: 8px 16px; width: auto; font-size: 14px; background: #6b7280; color: white;">Logout</button>
             </div>
 
-            <button id="startBtn" class="btn btn-primary">Start Tracking</button>
-            <button id="stopBtn" class="btn btn-danger hidden">Stop Tracking</button>
-            <button id="saveLocationBtn" class="btn btn-save hidden">📍 Save as Place of Interest</button>
-            <button id="checkInBtn" class="btn btn-save hidden">✓ Check In to Place</button>
-
-            <div id="checkInModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; flex-items: center; justify-content: center;">
-                <div style="background: white; padding: 20px; border-radius: 12px; max-width: 500px; width: 90%; margin: auto; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-                    <h3 style="margin-bottom: 15px; text-align: center;">Check In to Saved Location</h3>
-                    <div style="margin-bottom: 15px;">
-                        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #555;">Select Location:</label>
-                        <select id="savedLocationsSelect" style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px;">
-                            <option value="">-- Loading locations --</option>
-                        </select>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <button id="confirmCheckInBtn" class="btn btn-primary" style="flex: 1;">Check In</button>
-                        <button id="cancelCheckInBtn" class="btn" style="flex: 1; background: #6b7280; color: white;">Cancel</button>
-                    </div>
+            <!-- GPS Status -->
+            <div class="location-info">
+                <div style="font-weight: 600; margin-bottom: 8px;">
+                    <span class="gps-indicator" id="gpsIndicator"></span>GPS Location
                 </div>
+                <div><strong>Latitude:</strong> <span id="latitude">--</span></div>
+                <div><strong>Longitude:</strong> <span id="longitude">--</span></div>
+                <div><strong>Accuracy:</strong> <span id="accuracy">--</span>m</div>
+                <div><strong>Last Update:</strong> <span id="lastUpdate">--</span></div>
             </div>
+
+            <button id="refreshLocationBtn" class="btn btn-primary">📍 Get Current Location</button>
 
             <div id="status" class="status hidden"></div>
-            
-            <div id="statsContainer" class="hidden">
-                <div class="stats">
-                    <div class="stat-box">
-                        <div class="stat-label">Updates Sent</div>
-                        <div class="stat-value" id="updateCount">0</div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="stat-label">Current Speed</div>
-                        <div class="stat-value" id="currentSpeed">0</div>
-                    </div>
-                </div>
-                
-                <div class="location-info">
-                    <div><strong>Latitude:</strong> <span id="latitude">--</span></div>
-                    <div><strong>Longitude:</strong> <span id="longitude">--</span></div>
-                    <div><strong>Accuracy:</strong> <span id="accuracy">--</span>m</div>
-                    <div><strong>Last Update:</strong> <span id="lastUpdate">--</span></div>
-                </div>
+
+            <!-- Pin to Existing Store -->
+            <div class="section-header">Pin Current Location to Store</div>
+            <div class="instruction">
+                Select a store from the list below and click "Pin This Location" to mark your current GPS coordinates as this store's location.
             </div>
+
+            <div class="form-group">
+                <label for="storeSelect">Select Store</label>
+                <select id="storeSelect">
+                    <option value="">-- Loading stores --</option>
+                </select>
+            </div>
+
+            <button id="pinLocationBtn" class="btn btn-success" disabled>📍 Pin This Location</button>
+
+            <!-- Add New Store -->
+            <div class="section-header">Add New Store Location</div>
+            <div class="instruction">
+                Create a new store location at your current GPS position. Fill in the store details below.
+            </div>
+
+            <button id="addStoreBtn" class="btn btn-warning">➕ Add New Store</button>
         </div>
     </div>
 
     <script>
-        let watchId = null;
-        let updateInterval = null;
         let lastPosition = null;
-        let updateCount = 0;
-        let lastUpdateTime = null;
         let currentUser = null;
         let isAuthenticated = false;
-        let timeOffset = 0; // Difference between server and client time
+        let timeOffset = 0;
 
         const loginCard = document.getElementById('loginCard');
         const mainCard = document.getElementById('mainCard');
@@ -312,22 +295,16 @@
         const passwordInput = document.getElementById('password');
         const currentUserSpan = document.getElementById('currentUser');
 
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const saveLocationBtn = document.getElementById('saveLocationBtn');
-        const checkInBtn = document.getElementById('checkInBtn');
-        const checkInModal = document.getElementById('checkInModal');
-        const savedLocationsSelect = document.getElementById('savedLocationsSelect');
-        const confirmCheckInBtn = document.getElementById('confirmCheckInBtn');
-        const cancelCheckInBtn = document.getElementById('cancelCheckInBtn');
+        const refreshLocationBtn = document.getElementById('refreshLocationBtn');
+        const pinLocationBtn = document.getElementById('pinLocationBtn');
+        const addStoreBtn = document.getElementById('addStoreBtn');
         const statusDiv = document.getElementById('status');
         const serverUrlInput = document.getElementById('serverUrl');
         const serverUrlMainInput = document.getElementById('serverUrlMain');
-        const vehicleSelect = document.getElementById('vehicleSelect');
-        const updateIntervalSelect = document.getElementById('updateInterval');
-        const statsContainer = document.getElementById('statsContainer');
+        const storeSelect = document.getElementById('storeSelect');
+        const gpsIndicator = document.getElementById('gpsIndicator');
 
-        // Sync server URL fields between login and main interface
+        // Sync server URL fields
         serverUrlInput.addEventListener('change', () => {
             if (serverUrlMainInput) {
                 serverUrlMainInput.value = serverUrlInput.value;
@@ -339,16 +316,13 @@
             });
         }
 
-        // Set default server URL based on environment
+        // Auto-detect server URL
         let detectedUrl;
         if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-            // For production/network, use HTTPS if available
             if (window.location.protocol === 'https:') {
-                // When on HTTPS (port 8443), backend API is at standard HTTPS port 443
                 detectedUrl = `https://${window.location.hostname}`;
                 serverUrlInput.value = detectedUrl;
             } else {
-                // Fallback to HTTP
                 detectedUrl = `http://${window.location.hostname}:5000`;
                 serverUrlInput.value = detectedUrl;
             }
@@ -357,11 +331,8 @@
             serverUrlInput.value = detectedUrl;
         }
 
-        // Display detected URL in debug info
         document.getElementById('detectedUrl').textContent = detectedUrl;
-        console.log(`[Mobile Dashboard] Detected Server URL: ${detectedUrl}`);
-        console.log(`[Mobile Dashboard] Location Protocol: ${window.location.protocol}`);
-        console.log(`[Mobile Dashboard] Location Hostname: ${window.location.hostname}`);
+        console.log(`[Store Tracker] Detected Server URL: ${detectedUrl}`);
 
         function showLoginStatus(message, type) {
             loginStatus.textContent = message;
@@ -369,10 +340,16 @@
             loginStatus.classList.remove('hidden');
         }
 
+        function showStatus(message, type) {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.classList.remove('hidden');
+        }
+
         async function syncServerTime(serverUrl) {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
 
                 const response = await fetch(`${serverUrl}/api/time`, {
                     signal: controller.signal
@@ -409,13 +386,12 @@
                 const data = await response.json();
 
                 if (data.authenticated) {
-                    // Check if user has admin or operator role
                     if (data.user.role === 'admin' || data.user.role === 'operator') {
                         isAuthenticated = true;
                         currentUser = data.user;
                         showMainCard();
+                        loadStores();
                     } else {
-                        // User doesn't have permission, logout
                         await fetch(`${serverUrl}/api/auth/logout`, {
                             method: 'POST',
                             credentials: 'include'
@@ -432,40 +408,26 @@
             const username = usernameInput.value.trim();
             const password = passwordInput.value;
 
-            console.log(`[Login] Attempting login with URL: ${serverUrl} and username: ${username}`);
-
             if (!serverUrl) {
                 showLoginStatus('Please enter server URL', 'error');
-                console.error('[Login] Server URL is empty');
                 return;
             }
 
             if (!username || !password) {
                 showLoginStatus('Please enter username and password', 'error');
-                console.error('[Login] Username or password missing');
                 return;
             }
 
-            // Show loading state
             showLoginStatus('Logging in...', 'info');
             loginBtn.disabled = true;
-            console.log(`[Login] Initiating login process for user: ${username}`);
 
             try {
-                // Sync server time with timeout
-                showLoginStatus('Syncing server time...', 'info');
                 await syncServerTime(serverUrl);
 
-                showLoginStatus('Authenticating...', 'info');
-
-                // Login with timeout
-                const loginUrl = `${serverUrl}/api/auth/login`;
-                console.log(`[Login] Sending login request to: ${loginUrl}`);
-
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-                const response = await fetch(loginUrl, {
+                const response = await fetch(`${serverUrl}/api/auth/login`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -476,24 +438,19 @@
                 });
 
                 clearTimeout(timeoutId);
-                console.log(`[Login] Response received: ${response.status} ${response.statusText}`);
-
                 const data = await response.json();
-                console.log(`[Login] Response data:`, data);
 
                 if (response.ok) {
-                    // Check if user has admin or operator role
                     if (data.user.role === 'admin' || data.user.role === 'operator') {
                         isAuthenticated = true;
                         currentUser = data.user;
                         showLoginStatus('Login successful!', 'success');
-                        console.log(`User ${data.user.username} (${data.user.role}) logged in successfully`);
-                        setTimeout(showMainCard, 500);
+                        setTimeout(() => {
+                            showMainCard();
+                            loadStores();
+                        }, 500);
                     } else {
-                        // User doesn't have permission
                         showLoginStatus(`Access denied. User role '${data.user.role}' cannot access mobile interface. Required: admin or operator`, 'error');
-                        console.warn(`Login attempt with insufficient permissions. User role: ${data.user.role}`);
-                        // Logout the user
                         await fetch(`${serverUrl}/api/auth/logout`, {
                             method: 'POST',
                             credentials: 'include'
@@ -502,7 +459,6 @@
                     }
                 } else {
                     showLoginStatus(data.error || `Login failed (${response.status})`, 'error');
-                    console.error('Login response:', response.status, data);
                     loginBtn.disabled = false;
                 }
             } catch (error) {
@@ -511,17 +467,12 @@
                 } else {
                     showLoginStatus(`Error: ${error.message || 'Connection error. Check server URL.'}`, 'error');
                 }
-                console.error('Login error:', error);
                 loginBtn.disabled = false;
             }
         }
 
         async function logout() {
             const serverUrl = serverUrlInput.value.trim();
-
-            if (watchId) {
-                stopTracking();
-            }
 
             try {
                 await fetch(`${serverUrl}/api/auth/logout`, {
@@ -541,7 +492,6 @@
             loginCard.classList.add('hidden');
             mainCard.classList.remove('hidden');
             currentUserSpan.textContent = `${currentUser.username} (${currentUser.role})`;
-            // Sync server URL to main card
             if (serverUrlMainInput) {
                 serverUrlMainInput.value = serverUrlInput.value;
             }
@@ -553,125 +503,70 @@
             passwordInput.value = '';
             loginStatus.classList.add('hidden');
         }
-        
-        function showStatus(message, type) {
-            statusDiv.textContent = message;
-            statusDiv.className = `status ${type}`;
-            statusDiv.classList.remove('hidden');
-        }
-        
-        function calculateSpeed(lat1, lon1, lat2, lon2, timeDiff) {
-            const R = 6371;
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                     Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            const distance = R * c;
-            
-            const timeInHours = timeDiff / 3600000;
-            return distance / timeInHours;
-        }
-        
-        async function sendLocationData(position) {
+
+        async function loadStores() {
             const serverUrl = serverUrlInput.value.trim();
-            const deviceId = vehicleSelect.value;
-
-            if (!serverUrl || !deviceId) {
-                showStatus('Please fill in all fields', 'error');
-                return;
-            }
-
-            let speed = 0;
-            if (lastPosition && lastUpdateTime) {
-                const timeDiff = Date.now() - lastUpdateTime;
-                speed = calculateSpeed(
-                    lastPosition.latitude,
-                    lastPosition.longitude,
-                    position.coords.latitude,
-                    position.coords.longitude,
-                    timeDiff
-                );
-            }
-
-            const data = {
-                device_id: deviceId,
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-                speed: Math.max(0, speed)
-            };
+            if (!serverUrl) return;
 
             try {
-                const response = await fetch(`${serverUrl}/api/gps`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(data)
+                const response = await fetch(`${serverUrl}/api/places-of-interest`, {
+                    credentials: 'include'
                 });
-                
-                if (response.ok) {
-                    updateCount++;
-                    document.getElementById('updateCount').textContent = updateCount;
-                    document.getElementById('currentSpeed').textContent = speed.toFixed(1);
-                    document.getElementById('latitude').textContent = position.coords.latitude.toFixed(6);
-                    document.getElementById('longitude').textContent = position.coords.longitude.toFixed(6);
-                    document.getElementById('accuracy').textContent = position.coords.accuracy.toFixed(1);
-                    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
-                    
-                    showStatus(`✓ Update #${updateCount} sent successfully`, 'success');
-                    
-                    lastPosition = {
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude
-                    };
-                    lastUpdateTime = Date.now();
-                } else {
-                    showStatus('Server error. Check server URL.', 'error');
-                }
+                const result = await response.json();
+                const places = Array.isArray(result) ? result : (result.data || []);
+
+                storeSelect.innerHTML = '<option value="">-- Select a store --</option>';
+                places.forEach(place => {
+                    const option = document.createElement('option');
+                    option.value = place.id;
+                    option.dataset.name = place.name;
+                    option.textContent = `${place.name}${place.address ? ' - ' + place.address : ''}`;
+                    storeSelect.appendChild(option);
+                });
+
+                // Enable pin button only when both store is selected and GPS is available
+                storeSelect.addEventListener('change', updatePinButtonState);
             } catch (error) {
-                showStatus('Failed to send data. Check connection.', 'error');
-                console.error('Error:', error);
+                console.error('Error loading stores:', error);
+                showStatus('Failed to load stores', 'error');
             }
         }
-        
-        function startTracking() {
+
+        function updatePinButtonState() {
+            pinLocationBtn.disabled = !storeSelect.value || !lastPosition;
+        }
+
+        function getCurrentLocation() {
             if (!navigator.geolocation) {
                 showStatus('Location services not supported on this device', 'error');
                 return;
             }
 
-            const serverUrl = serverUrlInput.value.trim();
-            const deviceId = vehicleSelect.value;
+            showStatus('Getting GPS location...', 'info');
+            refreshLocationBtn.disabled = true;
+            gpsIndicator.classList.add('active');
 
-            if (!serverUrl) {
-                showStatus('Please enter server URL', 'error');
-                return;
-            }
-
-            if (!deviceId) {
-                showStatus('Please select a vehicle', 'error');
-                return;
-            }
-
-            showStatus('Starting location tracking...', 'info');
-            statsContainer.classList.remove('hidden');
-            
-            const intervalSeconds = parseInt(updateIntervalSelect.value);
-            
-            watchId = navigator.geolocation.watchPosition(
+            navigator.geolocation.getCurrentPosition(
                 (position) => {
-                    if (!updateInterval) {
-                        sendLocationData(position);
+                    lastPosition = {
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                        accuracy: position.coords.accuracy
+                    };
 
-                        updateInterval = setInterval(() => {
-                            navigator.geolocation.getCurrentPosition(sendLocationData);
-                        }, intervalSeconds * 1000);
-                    }
+                    document.getElementById('latitude').textContent = position.coords.latitude.toFixed(6);
+                    document.getElementById('longitude').textContent = position.coords.longitude.toFixed(6);
+                    document.getElementById('accuracy').textContent = position.coords.accuracy.toFixed(1);
+                    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+
+                    showStatus('GPS location updated', 'success');
+                    refreshLocationBtn.disabled = false;
+                    updatePinButtonState();
                 },
                 (error) => {
-                    showStatus(`Location Error: ${error.message}`, 'error');
+                    showStatus(`GPS Error: ${error.message}`, 'error');
+                    refreshLocationBtn.disabled = false;
+                    gpsIndicator.classList.remove('active');
                 },
                 {
                     enableHighAccuracy: true,
@@ -679,37 +574,54 @@
                     maximumAge: 0
                 }
             );
-            
-            startBtn.classList.add('hidden');
-            stopBtn.classList.remove('hidden');
-            saveLocationBtn.classList.remove('hidden');
-            checkInBtn.classList.remove('hidden');
-            serverUrlInput.disabled = true;
-            vehicleSelect.disabled = true;
-            updateIntervalSelect.disabled = true;
         }
-        
-        function stopTracking() {
-            if (watchId) {
-                navigator.geolocation.clearWatch(watchId);
-                watchId = null;
+
+        async function pinLocationToStore() {
+            if (!lastPosition) {
+                showStatus('Please get your current location first', 'error');
+                return;
             }
-            
-            if (updateInterval) {
-                clearInterval(updateInterval);
-                updateInterval = null;
+
+            if (!storeSelect.value) {
+                showStatus('Please select a store', 'error');
+                return;
             }
-            
-            showStatus('Tracking stopped', 'info');
-            startBtn.classList.remove('hidden');
-            stopBtn.classList.add('hidden');
-            saveLocationBtn.classList.add('hidden');
-            checkInBtn.classList.add('hidden');
-            serverUrlInput.disabled = false;
-            vehicleSelect.disabled = false;
-            updateIntervalSelect.disabled = false;
+
+            const serverUrl = serverUrlInput.value.trim();
+            const storeId = storeSelect.value;
+            const storeName = storeSelect.options[storeSelect.selectedIndex].dataset.name;
+
+            pinLocationBtn.disabled = true;
+
+            try {
+                const response = await fetch(`${serverUrl}/api/places-of-interest/${storeId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        latitude: lastPosition.latitude,
+                        longitude: lastPosition.longitude
+                    })
+                });
+
+                if (response.ok) {
+                    showStatus(`✓ Location pinned to "${storeName}"!`, 'success');
+                    storeSelect.value = '';
+                } else {
+                    const data = await response.json();
+                    showStatus(data.error || 'Failed to pin location', 'error');
+                }
+            } catch (error) {
+                showStatus('Error pinning location', 'error');
+                console.error('Pin error:', error);
+            } finally {
+                pinLocationBtn.disabled = false;
+                updatePinButtonState();
+            }
         }
-        
+
         function levenshteinDistance(str1, str2) {
             const len1 = str1.length;
             const len2 = str2.length;
@@ -745,7 +657,6 @@
                     const existingAreas = result.areas || [];
                     const enteredLower = enteredArea.toLowerCase().trim();
 
-                    // Check for exact match
                     const exactMatch = existingAreas.find(area => area.toLowerCase() === enteredLower);
                     if (exactMatch) {
                         const useExisting = window.confirm(
@@ -754,7 +665,6 @@
                         return useExisting ? exactMatch : enteredArea;
                     }
 
-                    // Check for similar matches (typos)
                     const similarMatches = existingAreas
                         .map(area => ({
                             area,
@@ -778,19 +688,19 @@
             return enteredArea;
         }
 
-        async function saveCurrentLocation() {
+        async function addNewStore() {
             if (!lastPosition) {
-                showStatus('No location data available to save', 'error');
+                showStatus('Please get your current location first', 'error');
                 return;
             }
 
             if (!isAuthenticated) {
-                showStatus('You must be logged in to save locations', 'error');
+                showStatus('You must be logged in to add stores', 'error');
                 return;
             }
 
-            const locationName = prompt('Enter a name for this place:', 'Important Location');
-            if (!locationName) return;
+            const storeName = prompt('Enter store name:', 'New Store');
+            if (!storeName) return;
 
             // Fetch geocoded address from coordinates
             let defaultAddress = '';
@@ -803,7 +713,6 @@
                 if (response.ok) {
                     const geocode = await response.json();
                     if (geocode.display_name) {
-                        // Extract and omit place name from address (keep everything after first comma)
                         defaultAddress = geocode.display_name.split(',').slice(1).join(',').trim();
                     }
                 }
@@ -830,6 +739,8 @@
 
             const description = prompt('Add description/notes (optional):', '');
 
+            addStoreBtn.disabled = true;
+
             try {
                 const response = await fetch(`${serverUrl}/api/places-of-interest`, {
                     method: 'POST',
@@ -838,7 +749,7 @@
                     },
                     credentials: 'include',
                     body: JSON.stringify({
-                        name: locationName,
+                        name: storeName,
                         address: address || '',
                         area: area || '',
                         contact: contact || '',
@@ -852,134 +763,27 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    showStatus(`✓ Place "${locationName}" saved to Places of Interest!`, 'success');
+                    showStatus(`✓ Store "${storeName}" added successfully!`, 'success');
+                    loadStores(); // Refresh store list
                 } else {
                     const data = await response.json();
-                    showStatus(data.error || 'Failed to save place', 'error');
+                    showStatus(data.error || 'Failed to add store', 'error');
                 }
             } catch (error) {
-                showStatus('Error saving place', 'error');
+                showStatus('Error adding store', 'error');
                 console.error('Error:', error);
+            } finally {
+                addStoreBtn.disabled = false;
             }
         }
 
-        async function loadSavedLocations() {
-            const serverUrl = serverUrlInput.value.trim();
-            if (!serverUrl) return;
-
-            try {
-                const response = await fetch(`${serverUrl}/api/places-of-interest`, {
-                    credentials: 'include'
-                });
-                const result = await response.json();
-
-                // Handle both array and object responses
-                const places = Array.isArray(result) ? result : (result.data || []);
-
-                savedLocationsSelect.innerHTML = '<option value="">-- Select a location --</option>';
-                places.forEach(place => {
-                    const option = document.createElement('option');
-                    option.value = place.id;
-                    option.textContent = place.name;
-                    savedLocationsSelect.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Error loading saved locations:', error);
-                showStatus('Failed to load saved locations', 'error');
-            }
-        }
-
-        function openCheckInModal() {
-            loadSavedLocations();
-            checkInModal.style.display = 'flex';
-        }
-
-        function closeCheckInModal() {
-            checkInModal.style.display = 'none';
-        }
-
-        async function performCheckIn() {
-            const placeId = savedLocationsSelect.value;
-            if (!placeId) {
-                showStatus('Please select a location', 'error');
-                return;
-            }
-
-            if (!lastPosition) {
-                showStatus('No location data available', 'error');
-                return;
-            }
-
-            const serverUrl = serverUrlInput.value.trim();
-            const deviceId = vehicleSelect.value;
-
-            if (!serverUrl || !deviceId) {
-                showStatus('Please configure server and vehicle', 'error');
-                return;
-            }
-
-            try {
-                // Get the selected place details
-                const response = await fetch(`${serverUrl}/api/places-of-interest`, {
-                    credentials: 'include'
-                });
-                const result = await response.json();
-
-                // Handle both array and object responses
-                const places = Array.isArray(result) ? result : (result.data || []);
-                const selectedPlace = places.find(p => p.id == placeId);
-
-                if (!selectedPlace) {
-                    showStatus('Place not found', 'error');
-                    return;
-                }
-
-                // Create a saved location (check-in) at the selected place
-                const checkInResponse = await fetch(`${serverUrl}/api/vehicles/${getVehicleIdFromDeviceId(deviceId)}/saved-locations`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        name: selectedPlace.name,
-                        latitude: selectedPlace.latitude,
-                        longitude: selectedPlace.longitude,
-                        area: selectedPlace.area || '',
-                        notes: `Check-in from mobile at ${new Date().toLocaleString()}`,
-                        visit_type: 'manual'
-                    })
-                });
-
-                if (checkInResponse.ok) {
-                    showStatus(`✓ Checked in to "${selectedPlace.name}"!`, 'success');
-                    closeCheckInModal();
-                } else {
-                    const error = await checkInResponse.json();
-                    showStatus(error.error || 'Failed to check in', 'error');
-                }
-            } catch (error) {
-                showStatus('Error during check-in', 'error');
-                console.error('Check-in error:', error);
-            }
-        }
-
-        function getVehicleIdFromDeviceId(deviceId) {
-            // Parse device_id format "device_X" to get X as vehicle ID
-            const match = deviceId.match(/device_(\d+)/);
-            return match ? match[1] : deviceId;
-        }
-
+        // Event listeners
         loginBtn.addEventListener('click', login);
         logoutBtn.addEventListener('click', logout);
-        startBtn.addEventListener('click', startTracking);
-        stopBtn.addEventListener('click', stopTracking);
-        saveLocationBtn.addEventListener('click', saveCurrentLocation);
-        checkInBtn.addEventListener('click', openCheckInModal);
-        confirmCheckInBtn.addEventListener('click', performCheckIn);
-        cancelCheckInBtn.addEventListener('click', closeCheckInModal);
+        refreshLocationBtn.addEventListener('click', getCurrentLocation);
+        pinLocationBtn.addEventListener('click', pinLocationToStore);
+        addStoreBtn.addEventListener('click', addNewStore);
 
-        // Allow Enter key to login
         passwordInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 login();
@@ -989,10 +793,11 @@
         // Check authentication on page load
         checkAuth();
 
+        // Request GPS permission on load
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
-                () => console.log('Location services ready'),
-                () => console.log('Location permission needed')
+                () => console.log('GPS permission granted'),
+                () => console.log('GPS permission needed')
             );
         }
     </script>
