@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Map from './components/Map';
 import TrackingPanel from './components/TrackingPanel';
+import StoreMapView from './components/StoreMapView';
 import AdminPanel from './components/AdminPanel';
 import Login from './components/Login';
 import ChangePasswordModal from './components/ChangePasswordModal';
@@ -22,8 +23,8 @@ function App() {
   // Authentication
   const { isAuthenticated, currentUser, loading, error: authError, handleLoginSuccess, handlePasswordChanged, handleLogout, setError: setAuthError } = useAuth();
 
-  // View state
-  const [activeView, setActiveView] = useState('tracking');
+  // View state - DEFAULT TO STORES (primary stakeholder need)
+  const [activeView, setActiveView] = useState('stores');
 
   // Map state
   const [mapCenter, setMapCenter] = useState(MAP_CONFIG.DEFAULT_CENTER);
@@ -101,13 +102,23 @@ function App() {
     <ErrorBoundary>
       <div className="h-screen flex flex-col bg-gray-100">
       <ErrorAlert message={error} onDismiss={() => setError(null)} />
-      <header className="bg-blue-600 text-white p-4 shadow-lg">
+      <header className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 shadow-lg">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold">Devnan Maps Dashboard</h1>
-            <p className="text-sm text-blue-100">Real-time vehicle tracking and location history</p>
+            <p className="text-sm text-blue-100">Business location management and tracking</p>
           </div>
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => setActiveView('stores')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeView === 'stores'
+                  ? 'bg-white text-blue-600'
+                  : 'bg-blue-700 text-white hover:bg-blue-800'
+              }`}
+            >
+              📍 Store Locations
+            </button>
             <button
               onClick={() => setActiveView('tracking')}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${
@@ -116,7 +127,7 @@ function App() {
                   : 'bg-blue-700 text-white hover:bg-blue-800'
               }`}
             >
-              Tracking
+              🚗 Vehicle Tracking
             </button>
             {canAccessAdmin(currentUser?.role) && (
               <button
@@ -127,7 +138,7 @@ function App() {
                     : 'bg-blue-700 text-white hover:bg-blue-800'
                 }`}
               >
-                Admin
+                ⚙️ Admin
               </button>
             )}
             <div className="text-right">
@@ -145,8 +156,30 @@ function App() {
           </div>
         </div>
       </header>
-      
-      {activeView === 'tracking' ? (
+
+      {activeView === 'stores' ? (
+        <div className="flex-1 flex overflow-hidden">
+          <StoreMapView
+            placesOfInterest={placesOfInterest}
+            onRefresh={fetchPlacesOfInterest}
+          />
+          <main className="flex-1 bg-white overflow-hidden">
+            <Map
+              vehicles={[]}
+              selectedVehicle={null}
+              vehicleHistory={[]}
+              savedLocations={[]}
+              placesOfInterest={placesOfInterest}
+              onRefreshPOI={fetchPlacesOfInterest}
+              currentUserRole={currentUser?.role}
+              center={mapCenter}
+              zoom={mapZoom}
+              showVehicles={false}
+              showPlaces={true}
+            />
+          </main>
+        </div>
+      ) : activeView === 'tracking' ? (
         <div className="flex-1 flex gap-4 p-4 overflow-hidden">
           <TrackingPanel
             vehicles={vehicles}
