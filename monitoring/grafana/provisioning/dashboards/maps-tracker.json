@@ -1,0 +1,315 @@
+{
+  "title": "Maps Tracker - Production Monitoring",
+  "tags": ["maps-tracker", "production"],
+  "timezone": "browser",
+  "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "GPS Submissions Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(gps_submissions_total{status=\"success\"}[5m])",
+            "legendFormat": "Successful - Vehicle {{vehicle_id}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(gps_submissions_total{status=\"failed\"}[5m])",
+            "legendFormat": "Failed - Vehicle {{vehicle_id}}",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Submissions/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Active Vehicles (Last 24h)",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "active_vehicles",
+            "refId": "A"
+          }
+        ],
+        "format": "none",
+        "valueName": "current",
+        "colorBackground": true,
+        "thresholds": "0,1,3"
+      },
+      {
+        "id": 3,
+        "title": "Failed Logins (Last Hour)",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+        "targets": [
+          {
+            "expr": "increase(failed_logins_total[1h])",
+            "refId": "A"
+          }
+        ],
+        "format": "none",
+        "valueName": "current",
+        "colorBackground": true,
+        "thresholds": "5,20,50"
+      },
+      {
+        "id": 4,
+        "title": "Database Size",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 4},
+        "targets": [
+          {
+            "expr": "database_size_megabytes",
+            "refId": "A"
+          }
+        ],
+        "format": "mbytes",
+        "valueName": "current",
+        "colorBackground": false
+      },
+      {
+        "id": 5,
+        "title": "Total Records",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 4},
+        "targets": [
+          {
+            "expr": "location_records_total + saved_location_records_total + audit_log_records_total",
+            "refId": "A"
+          }
+        ],
+        "format": "none",
+        "valueName": "current"
+      },
+      {
+        "id": 6,
+        "title": "API Response Time (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(flask_http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{endpoint}} - p95",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(flask_http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{endpoint}} - p50",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Response Time"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Database Records by Type",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "location_records_total",
+            "legendFormat": "Locations",
+            "refId": "A"
+          },
+          {
+            "expr": "saved_location_records_total",
+            "legendFormat": "Saved Locations",
+            "refId": "B"
+          },
+          {
+            "expr": "audit_log_records_total",
+            "legendFormat": "Audit Logs",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Records"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 8,
+        "title": "System CPU Usage",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "system_cpu_usage_percent",
+            "legendFormat": "CPU %",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "Usage", "max": 100, "min": 0},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [80], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "1m",
+          "handler": 1,
+          "name": "High CPU Usage",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 9,
+        "title": "System Memory Usage",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 16},
+        "targets": [
+          {
+            "expr": "system_memory_usage_percent",
+            "legendFormat": "Memory %",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "Usage", "max": 100, "min": 0},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 10,
+        "title": "System Disk Usage",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 16, "y": 16},
+        "targets": [
+          {
+            "expr": "system_disk_usage_percent",
+            "legendFormat": "Disk %",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "percent", "label": "Usage", "max": 100, "min": 0},
+          {"format": "short"}
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {"params": [90], "type": "gt"},
+              "operator": {"type": "and"},
+              "query": {"params": ["A", "5m", "now"]},
+              "reducer": {"params": [], "type": "avg"},
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "frequency": "1m",
+          "handler": 1,
+          "name": "Critical Disk Usage",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 11,
+        "title": "Data Cleanup Operations",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "increase(data_cleanup_operations_total{status=\"success\"}[1d])",
+            "legendFormat": "{{operation_type}} - Success",
+            "refId": "A"
+          },
+          {
+            "expr": "increase(data_cleanup_operations_total{status=\"failed\"}[1d])",
+            "legendFormat": "{{operation_type}} - Failed",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Operations"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Records Deleted (Last 24h)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "targets": [
+          {
+            "expr": "increase(records_deleted_total[1d])",
+            "legendFormat": "{{record_type}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Records"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 13,
+        "title": "HTTP Requests by Status Code",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "targets": [
+          {
+            "expr": "rate(flask_http_request_total{status=~\"2..\"}[5m])",
+            "legendFormat": "2xx Success",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(flask_http_request_total{status=~\"4..\"}[5m])",
+            "legendFormat": "4xx Client Error",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(flask_http_request_total{status=~\"5..\"}[5m])",
+            "legendFormat": "5xx Server Error",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Requests/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 14,
+        "title": "API Token Regenerations",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+        "targets": [
+          {
+            "expr": "increase(api_token_regenerations_total[1h])",
+            "legendFormat": "Vehicle {{vehicle_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Regenerations"},
+          {"format": "short"}
+        ]
+      }
+    ],
+  "schemaVersion": 27,
+  "version": 1,
+  "uid": "maps-tracker-main"
+}

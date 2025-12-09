@@ -1,0 +1,35 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: 'production'
+    app: 'maps_tracker'
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+
+# Load alerting rules
+rule_files:
+  - '/etc/prometheus/alerts.yml'
+
+# Scrape configuration
+scrape_configs:
+  # Maps Tracker Backend
+  - job_name: 'maps_backend'
+    static_configs:
+      - targets: ['backend:5000']
+        labels:
+          service: 'backend'
+          component: 'api'
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'

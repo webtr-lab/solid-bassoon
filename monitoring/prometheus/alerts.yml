@@ -1,0 +1,113 @@
+groups:
+  - name: maps_tracker_alerts
+    interval: 30s
+    rules:
+      # High error rate on GPS submissions
+      - alert: HighGPSFailureRate
+        expr: rate(gps_submissions_total{status="failed"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: gps
+        annotations:
+          summary: "High GPS submission failure rate"
+          description: "GPS submissions are failing at {{ $value }} per second for vehicle {{ $labels.vehicle_id }}"
+
+      # Backend API response time too high
+      - alert: HighAPIResponseTime
+        expr: histogram_quantile(0.95, rate(flask_http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High API response time"
+          description: "95th percentile response time is {{ $value }}s for endpoint {{ $labels.endpoint }}"
+
+      # Too many failed login attempts
+      - alert: HighFailedLoginRate
+        expr: rate(failed_logins_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: auth
+        annotations:
+          summary: "High failed login rate"
+          description: "Failed login attempts are occurring at {{ $value }} per second"
+
+      # Database size growing too fast
+      - alert: DatabaseSizeGrowth
+        expr: database_size_megabytes > 5000
+        for: 1h
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database size is large"
+          description: "Database size is {{ $value }}MB - consider running cleanup"
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: system_cpu_usage_percent > 80
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}% for more than 10 minutes"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: system_memory_usage_percent > 85
+        for: 10m
+        labels:
+          severity: warning
+          component: system
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value }}% for more than 10 minutes"
+
+      # High disk usage
+      - alert: HighDiskUsage
+        expr: system_disk_usage_percent > 90
+        for: 5m
+        labels:
+          severity: critical
+          component: system
+        annotations:
+          summary: "Critical disk usage"
+          description: "Disk usage is {{ $value }}% - immediate action required"
+
+      # Backend service down
+      - alert: BackendDown
+        expr: up{job="maps_backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "Backend service is down"
+          description: "Maps Tracker backend has been down for more than 1 minute"
+
+      # No active vehicles reporting
+      - alert: NoActiveVehicles
+        expr: active_vehicles == 0
+        for: 1h
+        labels:
+          severity: info
+          component: tracking
+        annotations:
+          summary: "No active vehicles"
+          description: "No vehicles have reported location data in the last 24 hours"
+
+      # Data cleanup failures
+      - alert: DataCleanupFailures
+        expr: rate(data_cleanup_operations_total{status="failed"}[1h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: maintenance
+        annotations:
+          summary: "Data cleanup operations failing"
+          description: "Data cleanup operations are failing"

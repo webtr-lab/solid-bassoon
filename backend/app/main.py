@@ -24,8 +24,10 @@ from app.routes.geocoding import geocoding_bp
 from app.routes.reports import reports_bp
 from app.routes.backups import backups_bp
 from app.routes.users import users_bp
+from app.routes.data_retention import retention_bp
 from app.services.backup_service import automatic_backup
 from app.services.email_service import init_email
+from app.monitoring import init_metrics, update_database_metrics, update_system_metrics
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import math
@@ -59,6 +61,7 @@ limiter.init_app(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'auth.login'
 init_email(app)
+init_metrics(app)
 
 # Initialize WebSocket support
 socketio = SocketIO(
@@ -82,6 +85,7 @@ app.register_blueprint(geocoding_bp)
 app.register_blueprint(reports_bp)
 app.register_blueprint(backups_bp)
 app.register_blueprint(users_bp)
+app.register_blueprint(retention_bp)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -263,11 +267,25 @@ with app.app_context():
         except Exception as e:
             app.logger.error(f"Failed to write credentials file: {e}")
 
-# Initialize scheduler for automatic backups
+# Initialize scheduler for automatic backups and metrics updates
 scheduler = BackgroundScheduler()
+
 # Run automatic backup every day at 2 AM
 scheduler.add_job(func=automatic_backup, trigger="cron", hour=2, minute=0)
+
+# Update metrics every 60 seconds
+def update_metrics():
+    with app.app_context():
+        update_database_metrics()
+        update_system_metrics()
+
+scheduler.add_job(func=update_metrics, trigger="interval", seconds=60)
 scheduler.start()
+
+# Update metrics immediately on startup
+with app.app_context():
+    update_database_metrics()
+    update_system_metrics()
 
 if __name__ == '__main__':
     # Never use debug=True in production - exposes sensitive information
