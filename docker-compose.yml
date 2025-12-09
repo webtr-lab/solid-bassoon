@@ -37,6 +37,7 @@ services:
       SMTP_USER: ${SMTP_USER}
       SMTP_PASS: ${SMTP_PASS}
       FRONTEND_URL: ${FRONTEND_URL}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
     volumes:
       - ./backups:/app/backups:z
       - ./logs:/app/logs:z
@@ -192,6 +193,23 @@ services:
       timeout: 10s
       retries: 3
 
+  redis:
+    image: redis:7-alpine
+    container_name: maps_redis
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - maps-network
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
 networks:
   maps-network:
     driver: bridge
@@ -201,6 +219,7 @@ volumes:
   prometheus-data:
   grafana-data:
   alertmanager-data:
+  redis-data:
 
 # IMPORTANT: Volume Initialization
 # Before running 'docker compose up' for the first time, execute:
