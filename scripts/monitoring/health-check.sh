@@ -36,69 +36,61 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
-# Send email notification (for critical status only)
+# Send email notification (for all statuses)
 send_health_notification() {
     local status=$1
     local details=$2
+    local systems_checked=$3
+    local systems_healthy=$4
 
     if [ "$EMAIL_ENABLED" != "true" ]; then
         return 0
     fi
 
     local subject
-    local status_emoji
-    if [ "$status" == "critical" ]; then
-        subject="${EMAIL_SUBJECT_PREFIX} [HEALTH-CHECK] Critical Alert - Immediate Action Required"
-        status_emoji="✗"
-    elif [ "$status" == "warning" ]; then
-        subject="${EMAIL_SUBJECT_PREFIX} [HEALTH-CHECK] Operational With Minor Issues - FYI"
-        status_emoji="⚠"
-    elif [ "$status" == "degraded" ]; then
-        subject="${EMAIL_SUBJECT_PREFIX} [HEALTH-CHECK] System Degraded - Action Recommended"
-        status_emoji="⚠"
+    local email_body
+
+    # Generate HTML email using Python templates
+    if [ "$status" == "critical" ] || [ "$status" == "warning" ]; then
+        subject="${EMAIL_SUBJECT_PREFIX} System Health Check - Issues Detected"
+        email_body=$(python3 << PYTHON_EOF
+import sys
+sys.path.insert(0, '$BASE_DIR')
+from scripts.email.email_templates_html import format_health_check_warning
+
+systems_checked = int('$systems_checked')
+systems_healthy = int('$systems_healthy')
+issues_found = '''$details'''
+
+print(format_health_check_warning(systems_checked, systems_healthy, issues_found))
+PYTHON_EOF
+)
     else
-        subject="${EMAIL_SUBJECT_PREFIX} [HEALTH-CHECK] All Systems Operational"
-        status_emoji="✓"
+        subject="${EMAIL_SUBJECT_PREFIX} System Health Check - All Systems Operational"
+        email_body=$(python3 << PYTHON_EOF
+import sys
+sys.path.insert(0, '$BASE_DIR')
+from scripts.email.email_templates_html import format_health_check_success
+
+systems_checked = int('$systems_checked')
+systems_healthy = int('$systems_healthy')
+
+print(format_health_check_success(systems_checked, systems_healthy))
+PYTHON_EOF
+)
     fi
-
-    local status_upper=$(echo "$status" | tr '[:lower:]' '[:upper:]')
-
-    local additional_info=""
-    if [ "$status" != "operational" ]; then
-        additional_info="Log File: ${LOG_FILE}
-Check logs: tail -100 ${LOG_FILE} | grep ERROR"
-    fi
-
-    local email_body="Maps Tracker Health Check Report
-════════════════════════════════════════════════════════════════
-
-Status:     ${status_emoji} ${status_upper}
-Timestamp:  $(date '+%Y-%m-%d %H:%M:%S')
-Server:     $(hostname)
-
-HEALTH CHECK DETAILS
-──────────────────────────────────────────────────────────────────
-${details}
-
-ACTION REQUIRED (if degraded/critical)
-──────────────────────────────────────────────────────────────────
-Please review and take corrective action:
-${additional_info}
-
-════════════════════════════════════════════════════════════════
-This is an automated notification from the Maps Tracker health check system."
 
     # Try using the SMTP relay script from scripts/email directory (use global BASE_DIR)
     local SEND_EMAIL_SCRIPT="${BASE_DIR}/scripts/email/send-email.sh"
     if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
-        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" --html 2>&1
         return $?
     fi
 
     # Fallback to parent directory for backward compatibility
     SEND_EMAIL_SCRIPT="$(dirname "${BASE_DIR}")/send-email.sh"
     if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
-        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" --html 2>&1
         return $?
     fi
 
@@ -365,6 +357,6 @@ log "========== Health Check Completed =========="
 log ""
 
 # Send email notification for all statuses (ok, warning, or critical)
-send_health_notification "$email_status" "$email_details"
+send_health_notification "$email_status" "$email_details" "$total_checks" "$passed_checks"
 
 exit $exit_code

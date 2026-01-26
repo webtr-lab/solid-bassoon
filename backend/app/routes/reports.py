@@ -8,6 +8,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required
 from app.models import SavedLocation, PlaceOfInterest
 from app.services.place_service import get_visit_analytics, find_place_for_coordinate
+from app.limiter import limiter
 import pytz
 
 reports_bp = Blueprint('reports', __name__, url_prefix='/api/reports')
@@ -32,6 +33,7 @@ def convert_utc_to_local(utc_dt):
 
 @reports_bp.route('/visits', methods=['GET'])
 @login_required
+@limiter.limit("60 per minute")  # Allow frequent report generation for dashboards
 def report_visits():
     """
     Return places of interest visited in a date range with visit counts and vehicles involved
@@ -87,6 +89,7 @@ def report_visits():
 
 @reports_bp.route('/check-ins', methods=['GET'])
 @login_required
+@limiter.limit("60 per minute")  # Allow frequent report generation for dashboards
 def report_check_ins():
     """
     Return manual location check-ins (saved locations excluding auto-detected stops)
@@ -130,17 +133,27 @@ def report_check_ins():
         check_ins = query.order_by(SavedLocation.timestamp.desc()).all()
 
         # Format results
-        results = [{
-            'id': ci.id,
-            'vehicle_id': ci.vehicle_id,
-            'vehicle_name': ci.vehicle.name if ci.vehicle else 'Unknown',
-            'name': ci.name,
-            'latitude': ci.latitude,
-            'longitude': ci.longitude,
-            'timestamp': convert_utc_to_local(ci.timestamp).isoformat() if ci.timestamp else '',
-            'notes': ci.notes,
-            'visit_type': ci.visit_type or 'manual'
-        } for ci in check_ins]
+        results = []
+        for ci in check_ins:
+            # Determine the visitor name: vehicle name if vehicle visit, username if manual visit
+            if ci.vehicle:
+                visitor_name = ci.vehicle.name
+            elif ci.user:
+                visitor_name = f"{ci.user.username} (manual)"
+            else:
+                visitor_name = 'Unknown'
+
+            results.append({
+                'id': ci.id,
+                'vehicle_id': ci.vehicle_id,
+                'vehicle_name': visitor_name,
+                'name': ci.name,
+                'latitude': ci.latitude,
+                'longitude': ci.longitude,
+                'timestamp': convert_utc_to_local(ci.timestamp).isoformat() if ci.timestamp else '',
+                'notes': ci.notes,
+                'visit_type': ci.visit_type or 'manual'
+            })
 
         return jsonify({
             'start': start.isoformat(),
@@ -156,6 +169,7 @@ def report_check_ins():
 
 @reports_bp.route('/visits-detailed', methods=['GET'])
 @login_required
+@limiter.limit("30 per minute")  # More expensive query, lower limit
 def report_visits_detailed():
     """
     Return detailed visits report grouped by location with vehicle visit details
@@ -207,23 +221,33 @@ def report_visits_detailed():
         # Group visits by location (name, lat, lon) with place matching for area info
         locations_dict = {}
         for visit in visits:
-            # Create a location key based on coordinates (with rounding for grouping nearby visits)
-            lat_rounded = round(visit.latitude, 4)
-            lon_rounded = round(visit.longitude, 4)
-            location_key = f"{lat_rounded},{lon_rounded}"
+            # Group by place_id if available, otherwise by coordinates
+            if visit.place_id:
+                # Use place_id as key for visits linked to a specific place
+                location_key = f"place_{visit.place_id}"
+            else:
+                # For unlinked visits, group by rounded coordinates
+                lat_rounded = round(visit.latitude, 4)
+                lon_rounded = round(visit.longitude, 4)
+                location_key = f"coord_{lat_rounded},{lon_rounded}"
 
             if location_key not in locations_dict:
-                # Try to match to a nearby place of interest to get area information
-                matched_place = find_place_for_coordinate(
-                    visit.latitude, visit.longitude,
-                    places=places,
-                    threshold_km=0.2
-                )
+                # Get place information
+                if visit.place_id and visit.place:
+                    # Visit is linked to a place - use place details
+                    matched_place = visit.place
+                else:
+                    # Try to match to a nearby place of interest
+                    matched_place = find_place_for_coordinate(
+                        visit.latitude, visit.longitude,
+                        places=places,
+                        threshold_km=0.2
+                    )
 
                 locations_dict[location_key] = {
-                    'name': visit.name,
-                    'latitude': visit.latitude,
-                    'longitude': visit.longitude,
+                    'name': matched_place.name if matched_place else visit.name,
+                    'latitude': matched_place.latitude if matched_place else visit.latitude,
+                    'longitude': matched_place.longitude if matched_place else visit.longitude,
                     'area': matched_place.area if matched_place else '',
                     'place_id': matched_place.id if matched_place else None,
                     'visits': []
@@ -231,9 +255,18 @@ def report_visits_detailed():
 
             # Convert UTC timestamp to local timezone
             local_timestamp = convert_utc_to_local(visit.timestamp)
+
+            # Determine the visitor name: vehicle name if vehicle visit, username if manual visit
+            if visit.vehicle:
+                visitor_name = visit.vehicle.name
+            elif visit.user:
+                visitor_name = f"{visit.user.username} (manual)"
+            else:
+                visitor_name = 'Unknown'
+
             locations_dict[location_key]['visits'].append({
                 'vehicle_id': visit.vehicle_id,
-                'vehicle_name': visit.vehicle.name if visit.vehicle else 'Unknown',
+                'vehicle_name': visitor_name,
                 'timestamp': local_timestamp.isoformat() if local_timestamp else visit.timestamp.isoformat(),
                 'notes': visit.notes or ''
             })

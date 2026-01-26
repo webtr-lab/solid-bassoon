@@ -7,6 +7,8 @@ Admin-only operations for user account management
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required, current_user
 from app.security import require_admin, PaginationParams, log_audit_event
+from app.csrf_protection import require_csrf
+from app.limiter import limiter
 from app.services.user_service import (
     get_user_or_404, format_user, get_all_users, update_user, delete_user
 )
@@ -62,6 +64,8 @@ def get_user(user_id):
 @users_bp.route('/<int:user_id>', methods=['PUT'])
 @login_required
 @require_admin
+@require_csrf
+@limiter.limit("60 per hour")  # Allow frequent user updates
 def update_user_info(user_id):
     """Update user information (admin only)"""
     try:
@@ -107,6 +111,8 @@ def update_user_info(user_id):
 @users_bp.route('/<int:user_id>', methods=['DELETE'])
 @login_required
 @require_admin
+@require_csrf
+@limiter.limit("10 per hour")  # Strict limit to prevent accidental bulk deletion
 def delete_user_by_id(user_id):
     """Delete a user (admin only)"""
     try:

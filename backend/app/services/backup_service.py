@@ -123,6 +123,8 @@ def create_backup(backup_name=None):
     Raises:
         Exception: If backup creation or verification fails
     """
+    from app.monitoring import record_backup_operation
+
     try:
         if not backup_name:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -169,6 +171,7 @@ def create_backup(backup_name=None):
             raise Exception(error_msg)
 
         current_app.logger.info(f"Backup created and verified successfully: {backup_name}")
+        record_backup_operation('manual', success=True)
 
         return {
             'filename': backup_name,
@@ -180,6 +183,7 @@ def create_backup(backup_name=None):
         }
     except Exception as e:
         current_app.logger.error(f"Backup error: {str(e)}")
+        record_backup_operation('manual', success=False)
         raise
 
 
@@ -445,6 +449,8 @@ def automatic_backup():
     - YYYY/MM/DD folder structure
     - 180-day retention policy
     """
+    from app.monitoring import record_backup_operation
+
     try:
         current_app.logger.info("Running automatic backup with new backup manager...")
 
@@ -464,6 +470,7 @@ def automatic_backup():
         if result.returncode == 0:
             current_app.logger.info("Automatic backup completed successfully")
             current_app.logger.info(f"Backup output: {result.stdout}")
+            record_backup_operation('automatic', success=True)
 
             # Run cleanup to enforce 180-day retention policy
             cleanup_result = subprocess.run(
@@ -493,9 +500,12 @@ def automatic_backup():
 
         else:
             current_app.logger.error(f"Automatic backup failed: {result.stderr}")
+            record_backup_operation('automatic', success=False)
             raise Exception(f"Backup script failed: {result.stderr}")
 
     except subprocess.TimeoutExpired:
         current_app.logger.error("Automatic backup timed out")
+        record_backup_operation('automatic', success=False)
     except Exception as e:
         current_app.logger.error(f"Automatic backup failed: {str(e)}")
+        record_backup_operation('automatic', success=False)

@@ -5,7 +5,9 @@ Handles CRUD operations for places of interest (POI)
 
 from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required, current_user
-from app.models import db
+from app.models import db, SavedLocation
+from app.limiter import limiter
+from app.csrf_protection import require_csrf
 from app.security import (
     ValidationError, validate_gps_coordinates, require_manager_or_admin,
     PaginationParams, log_audit_event
@@ -14,12 +16,14 @@ from app.services.place_service import (
     get_place_or_404, format_place, search_places, create_place,
     update_place, delete_place
 )
+from datetime import datetime
 
 places_bp = Blueprint('places', __name__, url_prefix='/api/places-of-interest')
 
 
 @places_bp.route('', methods=['GET'])
 @login_required
+@limiter.limit("100 per minute")  # Prevent scraping while allowing normal pagination
 def list_places():
     """List all places of interest with search, filter, and pagination"""
     try:
@@ -74,6 +78,8 @@ def get_areas():
 @places_bp.route('', methods=['POST'])
 @login_required
 @require_manager_or_admin
+@limiter.limit("20 per hour")  # Prevent spam while allowing legitimate bulk creation
+@require_csrf
 def create_new_place():
     """Create a new place of interest"""
     try:
@@ -147,6 +153,7 @@ def get_place(place_id):
 @places_bp.route('/<int:place_id>', methods=['PUT'])
 @login_required
 @require_manager_or_admin
+@require_csrf
 def update_place_info(place_id):
     """Update place of interest information"""
     try:
@@ -205,6 +212,7 @@ def update_place_info(place_id):
 @places_bp.route('/<int:place_id>', methods=['DELETE'])
 @login_required
 @require_manager_or_admin
+@require_csrf
 def delete_place_by_id(place_id):
     """Delete a place of interest"""
     try:
@@ -229,3 +237,88 @@ def delete_place_by_id(place_id):
     except Exception as e:
         current_app.logger.error(f"Error deleting place of interest: {str(e)}")
         return jsonify({'error': 'Failed to delete place of interest'}), 500
+
+
+@places_bp.route('/<int:place_id>/visits', methods=['POST'])
+@login_required
+@limiter.limit("30 per hour")  # Allow reasonable visit recording, prevent spam
+@require_csrf
+def record_visit(place_id):
+    """
+    Record a user visit to a place of interest
+
+    Expected JSON payload:
+    {
+        "latitude": 5.8520,
+        "longitude": -55.2038,
+        "notes": "Optional visit notes"
+    }
+    """
+    try:
+        place = get_place_or_404(place_id)
+
+        if not place:
+            return jsonify({'error': 'Place not found'}), 404
+
+        data = request.json or {}
+
+        # Get GPS coordinates (required)
+        if 'latitude' not in data or 'longitude' not in data:
+            return jsonify({'error': 'Latitude and longitude are required'}), 400
+
+        try:
+            latitude = float(data['latitude'])
+            longitude = float(data['longitude'])
+            validate_gps_coordinates(latitude, longitude)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid latitude/longitude values'}), 400
+        except ValidationError as e:
+            return jsonify({'error': str(e)}), 400
+
+        # Create visit record
+        visit = SavedLocation(
+            place_id=place_id,
+            user_id=current_user.id,
+            name=f"Visit to {place.name}",
+            latitude=latitude,
+            longitude=longitude,
+            stop_duration_minutes=0,
+            visit_type='manual_visit',
+            timestamp=datetime.utcnow(),
+            notes=data.get('notes', '')
+        )
+
+        db.session.add(visit)
+        db.session.commit()
+
+        current_app.logger.info(
+            f"Visit recorded: user={current_user.username}, "
+            f"place={place.name}, location=({latitude:.6f}, {longitude:.6f})"
+        )
+
+        log_audit_event(
+            user_id=current_user.id,
+            action='visit',
+            resource='place_of_interest',
+            resource_id=place_id,
+            status='success',
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent', ''),
+            details=f'Recorded visit to {place.name}'
+        )
+
+        return jsonify({
+            'message': 'Visit recorded successfully',
+            'visit': {
+                'id': visit.id,
+                'place_name': place.name,
+                'timestamp': visit.timestamp.isoformat(),
+                'latitude': visit.latitude,
+                'longitude': visit.longitude
+            }
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error recording visit to place {place_id}: {str(e)}")
+        return jsonify({'error': 'Failed to record visit'}), 500

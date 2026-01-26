@@ -61,3 +61,4 @@ secrets/
 
 # Claude Code Instance Settings
 .claude/settings.local.json
+monitoring/alertmanager/alertmanager.yml

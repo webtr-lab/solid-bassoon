@@ -267,12 +267,32 @@ def get_visit_analytics(visits, places=None, threshold_km=0.2):
         rec['last_visited'] = max(rec['last_visited'], visit.timestamp.isoformat()) \
             if rec['last_visited'] else visit.timestamp.isoformat()
 
-        # Track vehicles that visited
-        vehicle = Vehicle.query.get(visit.vehicle_id)
-        if vehicle:
-            if vehicle.id not in rec['vehicles']:
-                rec['vehicles'][vehicle.id] = {'id': vehicle.id, 'name': vehicle.name, 'count': 0}
-            rec['vehicles'][vehicle.id]['count'] += 1
+        # Track vehicles or users that visited
+        if visit.vehicle_id:
+            vehicle = Vehicle.query.get(visit.vehicle_id)
+            if vehicle:
+                visitor_key = f"vehicle_{vehicle.id}"
+                if visitor_key not in rec['vehicles']:
+                    rec['vehicles'][visitor_key] = {
+                        'id': vehicle.id,
+                        'name': vehicle.name,
+                        'type': 'vehicle',
+                        'count': 0
+                    }
+                rec['vehicles'][visitor_key]['count'] += 1
+        elif visit.user_id:
+            from app.models import User
+            user = User.query.get(visit.user_id)
+            if user:
+                visitor_key = f"user_{user.id}"
+                if visitor_key not in rec['vehicles']:
+                    rec['vehicles'][visitor_key] = {
+                        'id': user.id,
+                        'name': f"{user.username} (manual)",
+                        'type': 'user',
+                        'count': 0
+                    }
+                rec['vehicles'][visitor_key]['count'] += 1
 
     # Build result list with vehicle counts
     results = []

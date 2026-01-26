@@ -159,7 +159,7 @@ send_email_notification() {
         email_body=$(python3 << PYTHON_EOF
 import sys
 sys.path.insert(0, '$LOCAL_BASE_DIR')
-from scripts.email.email_templates import format_remote_sync_success
+from scripts.email.email_templates_html import format_remote_sync_success
 
 backup_count = '''$backup_count'''
 total_size = '''$total_size'''
@@ -174,7 +174,7 @@ PYTHON_EOF
         email_body=$(python3 << PYTHON_EOF
 import sys
 sys.path.insert(0, '$LOCAL_BASE_DIR')
-from scripts.email.email_templates import format_remote_sync_failure
+from scripts.email.email_templates_html import format_remote_sync_failure
 
 remote_host = '''$REMOTE_HOST'''
 error_msg = "See logs/rsync-backup.log for details"
@@ -190,7 +190,7 @@ PYTHON_EOF
     # Try using the SMTP relay script from scripts/email directory
     local SEND_EMAIL_SCRIPT="${LOCAL_BASE_DIR}/scripts/email/send-email.sh"
     if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
-        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${SCRIPT_LOG}"
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" --html 2>&1 | tee -a "${SCRIPT_LOG}"
         if [ ${PIPESTATUS[0]} -eq 0 ]; then
             log_info "Email notification sent successfully"
             return 0
@@ -203,7 +203,7 @@ PYTHON_EOF
     # Fallback to parent directory for backward compatibility
     SEND_EMAIL_SCRIPT="$(dirname "${LOCAL_BASE_DIR}")/send-email.sh"
     if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
-        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${SCRIPT_LOG}"
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" --html 2>&1 | tee -a "${SCRIPT_LOG}"
         if [ ${PIPESTATUS[0]} -eq 0 ]; then
             log_info "Email notification sent successfully"
             return 0

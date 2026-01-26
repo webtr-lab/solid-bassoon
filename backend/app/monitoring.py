@@ -65,6 +65,31 @@ records_deleted = Counter(
     ['record_type']
 )
 
+# Backup metrics
+backup_last_success_timestamp = Gauge(
+    'backup_last_success_timestamp',
+    'Unix timestamp of last successful backup'
+)
+
+backup_operations = Counter(
+    'backup_operations_total',
+    'Total number of backup operations',
+    ['operation_type', 'status']
+)
+
+# Security metrics
+csrf_validation_failures = Counter(
+    'csrf_validation_failures_total',
+    'Total number of CSRF validation failures',
+    ['endpoint']
+)
+
+rate_limit_exceeded = Counter(
+    'rate_limit_exceeded_total',
+    'Total number of rate limit violations',
+    ['endpoint', 'limit']
+)
+
 # System metrics
 system_cpu_usage = Gauge(
     'system_cpu_usage_percent',
@@ -117,6 +142,7 @@ def update_database_metrics():
     """
     from app.models import db, Location, SavedLocation, AuditLog, Vehicle
     from flask import current_app
+    from sqlalchemy import text
 
     try:
         # Update record counts
@@ -134,7 +160,7 @@ def update_database_metrics():
 
         # Get database size (PostgreSQL specific)
         result = db.session.execute(
-            "SELECT pg_database_size(current_database()) / (1024.0 * 1024.0)"
+            text("SELECT pg_database_size(current_database()) / (1024.0 * 1024.0)")
         )
         db_size = result.scalar()
         database_size_mb.set(db_size)
@@ -192,3 +218,22 @@ def record_cleanup_operation(operation_type, success=True):
 def record_records_deleted(record_type, count):
     """Record number of records deleted in cleanup"""
     records_deleted.labels(record_type=record_type).inc(count)
+
+
+def record_backup_operation(operation_type, success=True):
+    """Record a backup operation"""
+    import time
+    status = 'success' if success else 'failed'
+    backup_operations.labels(operation_type=operation_type, status=status).inc()
+    if success:
+        backup_last_success_timestamp.set(time.time())
+
+
+def record_csrf_failure(endpoint):
+    """Record a CSRF validation failure"""
+    csrf_validation_failures.labels(endpoint=endpoint).inc()
+
+
+def record_rate_limit_hit(endpoint, limit):
+    """Record a rate limit violation"""
+    rate_limit_exceeded.labels(endpoint=endpoint, limit=limit).inc()

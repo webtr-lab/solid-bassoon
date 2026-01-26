@@ -223,10 +223,10 @@ encrypt_backup() {
         return 1
     fi
 
-    # Check if GPG is available - REQUIRED
-    if ! command -v gpg &> /dev/null; then
-        log_error "CRITICAL: GPG not available - encryption is mandatory but gpg command not found"
-        log_error "Install gnupg: apt-get install gnupg"
+    # Check if GPG is available - REQUIRED (check in Docker container)
+    if ! docker exec maps_backend which gpg &> /dev/null; then
+        log_error "CRITICAL: GPG not available - encryption is mandatory but gpg command not found in backend container"
+        log_error "Install gnupg in backend container"
         return 1
     fi
 
@@ -235,15 +235,19 @@ encrypt_backup() {
     # Create encrypted version
     local encrypted_file="${backup_file}.gpg"
 
-    # Use GPG with symmetric encryption (AES-256)
+    # Convert host path to container path (backups/ -> /app/backups/)
+    local container_backup_file="${backup_file//${BASE_DIR}/\/app}"
+    local container_encrypted_file="${container_backup_file}.gpg"
+
+    # Use GPG with symmetric encryption (AES-256) via Docker
     # --symmetric: symmetric encryption
     # --cipher-algo AES256: use AES-256 algorithm
     # --batch --passphrase: non-interactive mode with passphrase
     # --output: specify output file
-    if echo "$ENCRYPTION_PASSPHRASE" | gpg --symmetric --cipher-algo AES256 \
+    if echo "$ENCRYPTION_PASSPHRASE" | docker exec -i maps_backend gpg --symmetric --cipher-algo AES256 \
         --batch --passphrase-fd 0 \
-        --output "${encrypted_file}" \
-        "${backup_file}" 2>&1 | tee -a "${BACKUP_LOG}"; then
+        --output "${container_encrypted_file}" \
+        "${container_backup_file}" 2>&1 | tee -a "${BACKUP_LOG}"; then
 
         # Verify encryption succeeded by checking file exists and has content
         if [ -f "${encrypted_file}" ] && [ -s "${encrypted_file}" ]; then
@@ -819,11 +823,11 @@ send_email_notification() {
 
     if [ "$status" == "success" ]; then
         subject="${EMAIL_SUBJECT_PREFIX} [${backup_type}] Backup Completed Successfully"
-        # Use Python to generate professional email template
+        # Use Python to generate professional HTML email template
         email_body=$(python3 << PYTHON_EOF
 import sys
 sys.path.insert(0, '$BASE_DIR')
-from scripts.email.email_templates import format_backup_success
+from scripts.email.email_templates_html import format_backup_success
 import os
 
 backup_file = '''$backup_file'''
@@ -839,7 +843,7 @@ PYTHON_EOF
         email_body=$(python3 << PYTHON_EOF
 import sys
 sys.path.insert(0, '$BASE_DIR')
-from scripts.email.email_templates import format_backup_failure
+from scripts.email.email_templates_html import format_backup_failure
 
 backup_type = '''$backup_type'''
 error_msg = '''$error_msg'''
@@ -852,14 +856,14 @@ PYTHON_EOF
     # Try using the SMTP relay script from scripts/email directory
     local SEND_EMAIL_SCRIPT="${BASE_DIR}/scripts/email/send-email.sh"
     if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
-        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${BACKUP_LOG}"
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" --html 2>&1 | tee -a "${BACKUP_LOG}"
         return 0
     fi
 
     # Fallback to parent directory for backward compatibility
     SEND_EMAIL_SCRIPT="$(dirname "${BASE_DIR}")/send-email.sh"
     if [ -f "${SEND_EMAIL_SCRIPT}" ]; then
-        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" 2>&1 | tee -a "${BACKUP_LOG}"
+        "${SEND_EMAIL_SCRIPT}" "$EMAIL_RECIPIENT" "$subject" "$email_body" --html 2>&1 | tee -a "${BACKUP_LOG}"
         return 0
     fi
 

@@ -10,6 +10,7 @@ from app.limiter import limiter
 from app.logging_config import setup_logging
 from app.sentry_config import init_sentry
 from app.websocket_events import register_websocket_events
+from app.csrf_protection import init_csrf
 from app.security import (
     validate_gps_coordinates, ValidationError, require_admin, require_manager_or_admin,
     login_rate_limiter, validate_email, validate_password_strength, PaginationParams,
@@ -27,6 +28,7 @@ from app.routes.users import users_bp
 from app.routes.data_retention import retention_bp
 from app.services.backup_service import automatic_backup
 from app.services.email_service import init_email
+from app.services.data_retention_service import run_full_cleanup
 from app.monitoring import init_metrics, update_database_metrics, update_system_metrics
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -48,10 +50,11 @@ access_logger = setup_logging(app)
 # Get CORS origins from environment variable or use defaults
 cors_origins = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')
 
-CORS(app, 
-     supports_credentials=True, 
+CORS(app,
+     supports_credentials=True,
      origins=cors_origins,
-     allow_headers=['Content-Type', 'Authorization'],
+     allow_headers=['Content-Type', 'Authorization', 'X-CSRF-Token'],
+     expose_headers=['X-CSRF-Token'],
      methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
 
 db.init_app(app)
@@ -62,6 +65,7 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'auth.login'
 init_email(app)
 init_metrics(app)
+init_csrf(app)
 
 # Initialize WebSocket support
 socketio = SocketIO(
@@ -218,11 +222,13 @@ with app.app_context():
         app.logger.info("Created 5 default vehicles")
     
     if User.query.count() == 0:
-        # Create default admin user with randomly generated password
-        from app.security import generate_secure_password
+        # Create default admin user
+        # Check for ADMIN_PASSWORD environment variable, otherwise use default
+        default_password = os.getenv('ADMIN_PASSWORD', 'admin123')
 
-        # Generate random password on first run
-        default_password = generate_secure_password()
+        # Determine if password came from environment or default
+        password_source = "environment variable" if os.getenv('ADMIN_PASSWORD') else "DEFAULT"
+
         admin_password = bcrypt.generate_password_hash(default_password).decode('utf-8')
         admin_user = User(
             username='admin',
@@ -236,34 +242,44 @@ with app.app_context():
 
         # Log credentials to application logs
         app.logger.warning("=" * 80)
-        app.logger.warning("INITIAL ADMIN CREDENTIALS GENERATED")
+        app.logger.warning("INITIAL ADMIN CREDENTIALS CREATED")
         app.logger.warning("=" * 80)
         app.logger.warning(f"Username: admin")
         app.logger.warning(f"Password: {default_password}")
+        app.logger.warning(f"Source: {password_source}")
         app.logger.warning("=" * 80)
+
+        if password_source == "DEFAULT":
+            app.logger.warning("⚠️  SECURITY WARNING: Using default password!")
+            app.logger.warning("⚠️  Set ADMIN_PASSWORD environment variable for production")
+            app.logger.warning("=" * 80)
+
         app.logger.warning("IMPORTANT: Change this password on first login")
         app.logger.warning("=" * 80)
 
-        # Write credentials to secure temporary file as backup
+        # Write credentials to a persistent file in the app directory
         try:
-            # Use secure temporary file with proper permissions
-            with tempfile.NamedTemporaryFile(
-                mode='w',
-                prefix='INITIAL_ADMIN_',
-                suffix='.txt',
-                delete=False,
-                dir=None  # Use system temp directory (secure)
-            ) as f:
-                credentials_file = f.name
-                f.write(f"Initial Admin Credentials\n")
-                f.write(f"========================\n")
+            credentials_file = os.path.join('/app', 'ADMIN_CREDENTIALS.txt')
+            with open(credentials_file, 'w') as f:
+                f.write("=" * 60 + "\n")
+                f.write("MAPS TRACKER - INITIAL ADMIN CREDENTIALS\n")
+                f.write("=" * 60 + "\n\n")
                 f.write(f"Username: admin\n")
                 f.write(f"Password: {default_password}\n")
-                f.write(f"Important: Change this password on first login\n")
+                f.write(f"Source:   {password_source}\n\n")
+
+                if password_source == "DEFAULT":
+                    f.write("⚠️  SECURITY WARNING:\n")
+                    f.write("This is the default password. For production use,\n")
+                    f.write("set ADMIN_PASSWORD environment variable in .env file.\n\n")
+
+                f.write("IMPORTANT: Change this password immediately after first login!\n")
+                f.write("=" * 60 + "\n")
 
             # Set restrictive permissions (read/write for owner only)
             os.chmod(credentials_file, 0o600)
-            app.logger.warning(f"Credentials also saved to temporary file: {credentials_file}")
+            app.logger.warning(f"📄 Credentials saved to: {credentials_file}")
+            app.logger.warning(f"📄 Read with: docker exec maps_backend cat /app/ADMIN_CREDENTIALS.txt")
         except Exception as e:
             app.logger.error(f"Failed to write credentials file: {e}")
 
@@ -272,6 +288,22 @@ scheduler = BackgroundScheduler()
 
 # Run automatic backup every day at 2 AM
 scheduler.add_job(func=automatic_backup, trigger="cron", hour=2, minute=0)
+
+# Run data retention cleanup every day at 3 AM (after backups)
+def scheduled_data_cleanup():
+    """Run data retention cleanup in app context"""
+    with app.app_context():
+        try:
+            app.logger.info("Starting scheduled data retention cleanup")
+            results = run_full_cleanup(dry_run=False)
+            app.logger.info(
+                f"Data retention cleanup completed: "
+                f"{results.get('total_records_deleted', 0)} records deleted"
+            )
+        except Exception as e:
+            app.logger.error(f"Scheduled data cleanup failed: {str(e)}")
+
+scheduler.add_job(func=scheduled_data_cleanup, trigger="cron", hour=3, minute=0)
 
 # Update metrics every 60 seconds
 def update_metrics():

@@ -111,3 +111,58 @@ groups:
         annotations:
           summary: "Data cleanup operations failing"
           description: "Data cleanup operations are failing"
+
+      # Backup not running (no backup in last 25 hours)
+      - alert: BackupNotRunning
+        expr: time() - backup_last_success_timestamp > 90000
+        for: 5m
+        labels:
+          severity: critical
+          component: backup
+        annotations:
+          summary: "Backup system not running"
+          description: "No successful backup in the last 25 hours - automatic backups may have stopped"
+
+      # Backup failures
+      - alert: BackupFailure
+        expr: rate(backup_operations_total{status="failed"}[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          component: backup
+        annotations:
+          summary: "Backup operations failing"
+          description: "Backup operations are failing - check logs immediately"
+
+      # CSRF attack detected (multiple failures in short time)
+      - alert: CSRFAttackDetected
+        expr: rate(csrf_validation_failures_total[5m]) > 1
+        for: 2m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "Possible CSRF attack detected"
+          description: "Multiple CSRF validation failures detected - possible attack attempt"
+
+      # Rate limit abuse detected
+      - alert: RateLimitAbuse
+        expr: rate(rate_limit_exceeded_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: security
+        annotations:
+          summary: "Rate limit abuse detected"
+          description: "Excessive rate limit violations - possible DoS attempt or misbehaving client"
+
+      # Sustained brute force on authentication
+      - alert: BruteForceAttack
+        expr: rate(failed_logins_total[2m]) > 2
+        for: 5m
+        labels:
+          severity: critical
+          component: security
+        annotations:
+          summary: "Brute force attack detected"
+          description: "Sustained failed login attempts - possible credential stuffing attack"

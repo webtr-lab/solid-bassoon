@@ -34,6 +34,7 @@ def format_vehicle(vehicle):
         'id': vehicle.id,
         'name': vehicle.name,
         'device_id': vehicle.device_id,
+        'api_token': vehicle.api_token,  # Include API token for admin management
         'is_active': vehicle.is_active
     }
 
@@ -210,10 +211,16 @@ def create_vehicle(name, device_id, is_active=True):
         is_active=is_active
     )
 
+    # Generate API token for GPS authentication
+    vehicle.generate_api_token()
+
     try:
         db.session.add(vehicle)
         db.session.commit()
-        current_app.logger.info(f"Vehicle created: {vehicle.name} (device_id={vehicle.device_id})")
+        current_app.logger.info(
+            f"Vehicle created: {vehicle.name} (device_id={vehicle.device_id}, "
+            f"api_token={vehicle.api_token})"
+        )
         return vehicle
     except Exception as e:
         db.session.rollback()

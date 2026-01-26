@@ -7,6 +7,8 @@ Admin-only operations for database integrity and disaster recovery
 from flask import Blueprint, request, jsonify, current_app, send_file
 from flask_login import login_required, current_user
 from app.security import require_admin, log_audit_event
+from app.csrf_protection import require_csrf
+from app.limiter import limiter
 from app.services.backup_service import (
     list_backups, create_backup, restore_backup, verify_backup, BACKUP_DIR
 )
@@ -46,6 +48,8 @@ def list_all_backups():
 @backups_bp.route('/create', methods=['POST'])
 @login_required
 @require_admin
+@require_csrf
+@limiter.limit("10 per hour")  # Backups are resource-intensive
 def create_new_backup():
     """Create a manual backup (admin only)"""
     try:
@@ -89,6 +93,8 @@ def create_new_backup():
 @backups_bp.route('/restore', methods=['POST'])
 @login_required
 @require_admin
+@require_csrf
+@limiter.limit("5 per hour")  # Restores are very dangerous and resource-intensive
 def restore_from_backup():
     """Restore database from a backup (admin only)"""
     try:
@@ -162,6 +168,8 @@ def download_backup(filename):
 @backups_bp.route('/delete/<filename>', methods=['DELETE'])
 @login_required
 @require_admin
+@require_csrf
+@limiter.limit("20 per hour")  # Allow reasonable deletion rate
 def delete_backup(filename):
     """Delete a backup file (admin only)"""
     try:
@@ -202,6 +210,7 @@ def delete_backup(filename):
 @backups_bp.route('/verify/<filename>', methods=['POST'])
 @login_required
 @require_admin
+@require_csrf
 def verify_backup_file(filename):
     """Verify a backup file (admin only)"""
     try:

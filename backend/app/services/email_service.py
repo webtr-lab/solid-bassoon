@@ -105,7 +105,7 @@ def send_password_changed_email(user):
 
 def send_registration_confirmation_email(user, login_url):
     """
-    Send registration confirmation email to new user
+    Send registration confirmation email to new user with BCC to admin
 
     Args:
         user: User object
@@ -116,6 +116,9 @@ def send_registration_confirmation_email(user, login_url):
         return False
 
     try:
+        # Admin email for BCC
+        admin_email = os.getenv('ADMIN_EMAIL', 'ginmardo.a@gmail.com')
+
         email_body = f"""
         <h2>Welcome to Maps Tracker!</h2>
         <p>Hello {user.username},</p>
@@ -128,6 +131,7 @@ def send_registration_confirmation_email(user, login_url):
           <li>Username: {user.username}</li>
           <li>Email: {user.email}</li>
           <li>Role: {user.role}</li>
+          <li>Registration Date: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC</li>
         </ul>
         <hr>
         <p>If you didn't create this account, please contact an administrator immediately.</p>
@@ -137,11 +141,12 @@ def send_registration_confirmation_email(user, login_url):
         msg = Message(
             subject='Welcome to Maps Tracker - Account Created',
             recipients=[user.email],
+            bcc=[admin_email],  # BCC to admin
             html=email_body
         )
 
         mail.send(msg)
-        current_app.logger.info(f"Registration confirmation email sent to {user.email}")
+        current_app.logger.info(f"Registration confirmation email sent to {user.email} (BCC: {admin_email})")
         return True
 
     except Exception as e:

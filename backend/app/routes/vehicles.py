@@ -10,6 +10,9 @@ from app.security import (
     ValidationError, validate_gps_coordinates, require_manager_or_admin,
     PaginationParams, log_audit_event
 )
+from app.csrf_protection import require_csrf
+from app.limiter import limiter
+from app.monitoring import record_token_regeneration
 from app.services.vehicle_service import (
     get_vehicle_or_404, format_vehicle, get_vehicle_current_location,
     get_vehicle_history, get_vehicle_stats, export_vehicle_data,
@@ -59,6 +62,8 @@ def list_vehicles():
 @vehicles_bp.route('', methods=['POST'])
 @login_required
 @require_manager_or_admin
+@require_csrf
+@limiter.limit("20 per hour")  # Prevent bulk vehicle creation abuse
 def create_new_vehicle():
     """Create a new vehicle"""
     try:
@@ -116,6 +121,8 @@ def get_vehicle(vehicle_id):
 @vehicles_bp.route('/<int:vehicle_id>', methods=['PUT'])
 @login_required
 @require_manager_or_admin
+@require_csrf
+@limiter.limit("60 per hour")  # Allow frequent updates
 def update_vehicle_info(vehicle_id):
     """Update vehicle information"""
     try:
@@ -160,6 +167,8 @@ def update_vehicle_info(vehicle_id):
 @vehicles_bp.route('/<int:vehicle_id>', methods=['DELETE'])
 @login_required
 @require_manager_or_admin
+@require_csrf
+@limiter.limit("20 per hour")  # Prevent accidental bulk deletion
 def delete_vehicle_by_id(vehicle_id):
     """Delete a vehicle"""
     try:
@@ -184,6 +193,48 @@ def delete_vehicle_by_id(vehicle_id):
     except Exception as e:
         current_app.logger.error(f"Error deleting vehicle: {str(e)}")
         return jsonify({'error': 'Failed to delete vehicle'}), 500
+
+
+@vehicles_bp.route('/<int:vehicle_id>/regenerate-token', methods=['POST'])
+@login_required
+@require_manager_or_admin
+@require_csrf
+def regenerate_vehicle_token(vehicle_id):
+    """Regenerate API token for a vehicle"""
+    try:
+        vehicle = get_vehicle_or_404(vehicle_id)
+
+        if not vehicle:
+            return jsonify({'error': 'Vehicle not found'}), 404
+
+        # Generate new token
+        new_token = vehicle.generate_api_token()
+        db.session.commit()
+
+        log_audit_event(
+            user_id=current_user.id,
+            action='update',
+            resource='vehicle_token',
+            resource_id=vehicle_id,
+            status='success',
+            ip_address=request.remote_addr,
+            user_agent=request.headers.get('User-Agent', ''),
+            details=f'Regenerated API token for vehicle: {vehicle.name}'
+        )
+
+        current_app.logger.info(f"API token regenerated for vehicle {vehicle.name} by {current_user.username}")
+
+        # Record metric for monitoring
+        record_token_regeneration(vehicle_id)
+
+        return jsonify({
+            'message': 'API token regenerated successfully',
+            'api_token': new_token
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error regenerating token: {str(e)}")
+        return jsonify({'error': 'Failed to regenerate token'}), 500
 
 
 @vehicles_bp.route('/<int:vehicle_id>/location', methods=['GET'])
@@ -277,6 +328,7 @@ def get_saved_locations(vehicle_id):
 
 @vehicles_bp.route('/<int:vehicle_id>/saved-locations', methods=['POST'])
 @login_required
+@require_csrf
 def save_location(vehicle_id):
     """Manually save a location for a vehicle"""
     try:
@@ -326,6 +378,7 @@ def save_location(vehicle_id):
 
 @vehicles_bp.route('/<int:vehicle_id>/saved-locations/<int:location_id>', methods=['PUT'])
 @login_required
+@require_csrf
 def update_saved_location(vehicle_id, location_id):
     """Update a saved location"""
     try:
@@ -357,6 +410,7 @@ def update_saved_location(vehicle_id, location_id):
 
 @vehicles_bp.route('/<int:vehicle_id>/saved-locations/<int:location_id>', methods=['DELETE'])
 @login_required
+@require_csrf
 def delete_saved_location(vehicle_id, location_id):
     """Delete a saved location"""
     try:

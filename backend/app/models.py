@@ -19,15 +19,21 @@ class User(UserMixin, db.Model):
 
 class Vehicle(db.Model):
     __tablename__ = 'vehicles'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     device_id = db.Column(db.String(100), unique=True, nullable=False)
+    api_token = db.Column(db.String(64), unique=True, nullable=True, index=True)  # API token for GPS authentication
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     locations = db.relationship('Location', backref='vehicle', lazy=True, cascade='all, delete-orphan')
     saved_locations = db.relationship('SavedLocation', backref='vehicle', lazy=True, cascade='all, delete-orphan')
+
+    def generate_api_token(self):
+        """Generate a secure API token for GPS authentication"""
+        self.api_token = secrets.token_urlsafe(32)  # 32 bytes = 256 bits
+        return self.api_token
 
 class Location(db.Model):
     __tablename__ = 'locations'
@@ -43,7 +49,9 @@ class SavedLocation(db.Model):
     __tablename__ = 'saved_locations'
 
     id = db.Column(db.Integer, primary_key=True)
-    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicles.id'), nullable=False, index=True)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicles.id'), nullable=True, index=True)
+    place_id = db.Column(db.Integer, db.ForeignKey('places_of_interest.id'), nullable=True, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True)
     name = db.Column(db.String(200), nullable=False)
     latitude = db.Column(db.Float, nullable=False)
     longitude = db.Column(db.Float, nullable=False)
@@ -51,6 +59,10 @@ class SavedLocation(db.Model):
     visit_type = db.Column(db.String(50))
     timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     notes = db.Column(db.Text)
+
+    # Relationships
+    place = db.relationship('PlaceOfInterest', backref=db.backref('visits', lazy=True))
+    user = db.relationship('User', backref=db.backref('visits', lazy=True))
 
 class PlaceOfInterest(db.Model):
     __tablename__ = 'places_of_interest'

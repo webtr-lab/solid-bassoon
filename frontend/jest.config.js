@@ -5,20 +5,20 @@ export default {
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
   },
   transform: {
-    '^.+\\.(js|jsx)$': 'babel-jest',
+    '^.+\\.(js|jsx|ts|tsx)$': 'babel-jest',
   },
   transformIgnorePatterns: [
     'node_modules/(?!(.*\\.mjs$))',
   ],
   collectCoverageFrom: [
-    'src/**/*.{js,jsx}',
+    'src/**/*.{js,jsx,ts,tsx}',
     '!src/main.jsx',
-    '!src/**/*.test.{js,jsx}',
+    '!src/**/*.test.{js,jsx,ts,tsx}',
     '!src/**/__tests__/**',
   ],
   testMatch: [
-    '<rootDir>/src/**/__tests__/**/*.{js,jsx}',
-    '<rootDir>/src/**/*.test.{js,jsx}',
+    '<rootDir>/src/**/__tests__/**/*.{js,jsx,ts,tsx}',
+    '<rootDir>/src/**/*.test.{js,jsx,ts,tsx}',
   ],
   moduleDirectories: ['node_modules', 'src'],
   testEnvironmentOptions: {

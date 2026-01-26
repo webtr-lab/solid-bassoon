@@ -240,6 +240,34 @@
                 <button id="logoutBtn" class="btn" style="padding: 8px 16px; width: auto; font-size: 14px; background: #6b7280; color: white;">Logout</button>
             </div>
 
+            <!-- Vehicle Tracking Section -->
+            <div class="section-header" style="margin-top: 0;">🚗 Vehicle Tracking</div>
+            <div class="instruction">
+                Select your vehicle and start tracking to send live GPS updates to the dashboard.
+            </div>
+
+            <div class="form-group">
+                <label for="vehicleSelect">Select Vehicle</label>
+                <select id="vehicleSelect">
+                    <option value="">-- Select your vehicle --</option>
+                </select>
+            </div>
+
+            <div id="trackingStatus" class="location-info hidden">
+                <div style="font-weight: 600; margin-bottom: 8px; color: #059669;">
+                    <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #10b981; margin-right: 8px; animation: pulse 2s infinite;"></span>
+                    Tracking Active
+                </div>
+                <div><strong>Vehicle:</strong> <span id="trackingVehicle">--</span></div>
+                <div><strong>Last Update:</strong> <span id="lastTrackingUpdate">--</span></div>
+                <div><strong>Points Sent:</strong> <span id="pointsSent">0</span></div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button id="startTrackingBtn" class="btn btn-success" style="margin-bottom: 0;" disabled>▶ Start Tracking</button>
+                <button id="stopTrackingBtn" class="btn" style="margin-bottom: 0; background: #dc2626; color: white; display: none;">■ Stop Tracking</button>
+            </div>
+
             <!-- GPS Status -->
             <div class="location-info">
                 <div style="font-weight: 600; margin-bottom: 8px;">
@@ -255,20 +283,20 @@
 
             <div id="status" class="status hidden"></div>
 
-            <!-- Pin to Existing Store -->
-            <div class="section-header">Pin Current Location to Store</div>
+            <!-- Record Visit to Store -->
+            <div class="section-header">Record Visit to Store</div>
             <div class="instruction">
-                Select a store from the list below and click "Pin This Location" to mark your current GPS coordinates as this store's location.
+                Select a store and click "Record Visit" to log that you visited this location at the current time.
             </div>
 
             <div class="form-group">
-                <label for="storeSelect">Select Store</label>
-                <select id="storeSelect">
+                <label for="visitStoreSelect">Select Store for Visit</label>
+                <select id="visitStoreSelect">
                     <option value="">-- Loading stores --</option>
                 </select>
             </div>
 
-            <button id="pinLocationBtn" class="btn btn-success" disabled>📍 Pin This Location</button>
+            <button id="recordVisitBtn" class="btn btn-primary" disabled>✓ Record Visit</button>
 
             <!-- Add New Store -->
             <div class="section-header">Add New Store Location</div>
@@ -285,6 +313,15 @@
         let currentUser = null;
         let isAuthenticated = false;
         let timeOffset = 0;
+        let csrfToken = null;  // Store CSRF token for state-changing requests
+
+        // Vehicle tracking state
+        let trackingInterval = null;
+        let gpsWatchId = null;  // Watch position ID for continuous GPS tracking
+        let selectedVehicle = null;
+        let trackingActive = false;
+        let pointsSent = 0;
+        let lastGPSUpdate = null;  // Track last GPS update time
 
         const loginCard = document.getElementById('loginCard');
         const mainCard = document.getElementById('mainCard');
@@ -295,13 +332,22 @@
         const passwordInput = document.getElementById('password');
         const currentUserSpan = document.getElementById('currentUser');
 
+        // Vehicle tracking elements
+        const vehicleSelect = document.getElementById('vehicleSelect');
+        const startTrackingBtn = document.getElementById('startTrackingBtn');
+        const stopTrackingBtn = document.getElementById('stopTrackingBtn');
+        const trackingStatus = document.getElementById('trackingStatus');
+        const trackingVehicle = document.getElementById('trackingVehicle');
+        const lastTrackingUpdate = document.getElementById('lastTrackingUpdate');
+        const pointsSentSpan = document.getElementById('pointsSent');
+
         const refreshLocationBtn = document.getElementById('refreshLocationBtn');
-        const pinLocationBtn = document.getElementById('pinLocationBtn');
+        const recordVisitBtn = document.getElementById('recordVisitBtn');
         const addStoreBtn = document.getElementById('addStoreBtn');
         const statusDiv = document.getElementById('status');
         const serverUrlInput = document.getElementById('serverUrl');
         const serverUrlMainInput = document.getElementById('serverUrlMain');
-        const storeSelect = document.getElementById('storeSelect');
+        const visitStoreSelect = document.getElementById('visitStoreSelect');
         const gpsIndicator = document.getElementById('gpsIndicator');
 
         // Sync server URL fields
@@ -346,6 +392,16 @@
             statusDiv.classList.remove('hidden');
         }
 
+        function extractCSRFToken(response) {
+            // Extract CSRF token from response headers
+            const token = response.headers.get('X-CSRF-Token');
+            if (token) {
+                csrfToken = token;
+                console.log('CSRF token updated');
+            }
+            return response;
+        }
+
         async function syncServerTime(serverUrl) {
             try {
                 const controller = new AbortController();
@@ -383,6 +439,7 @@
                 const response = await fetch(`${serverUrl}/api/auth/check`, {
                     credentials: 'include'
                 });
+                extractCSRFToken(response);  // Extract CSRF token
                 const data = await response.json();
 
                 if (data.authenticated) {
@@ -495,6 +552,8 @@
             if (serverUrlMainInput) {
                 serverUrlMainInput.value = serverUrlInput.value;
             }
+            // Load vehicles for tracking
+            loadVehicles();
         }
 
         function showLoginCard() {
@@ -502,6 +561,42 @@
             loginCard.classList.remove('hidden');
             passwordInput.value = '';
             loginStatus.classList.add('hidden');
+            stopTracking(); // Stop tracking when logging out
+        }
+
+        async function loadVehicles() {
+            const serverUrl = serverUrlInput.value.trim();
+            if (!serverUrl) return;
+
+            try {
+                const response = await fetch(`${serverUrl}/api/vehicles`, {
+                    credentials: 'include'
+                });
+                extractCSRFToken(response);  // Extract CSRF token
+                const result = await response.json();
+                const vehicles = Array.isArray(result) ? result : (result.data || []);
+
+                // Sort vehicles by name in ascending order
+                vehicles.sort((a, b) => a.name.localeCompare(b.name));
+
+                vehicleSelect.innerHTML = '<option value="">-- Select your vehicle --</option>';
+                vehicles.forEach(vehicle => {
+                    const option = document.createElement('option');
+                    option.value = vehicle.device_id;
+                    option.dataset.name = vehicle.name;
+                    option.dataset.apiToken = vehicle.api_token;
+                    option.textContent = `${vehicle.name}`;
+                    vehicleSelect.appendChild(option);
+                });
+
+                // Enable start button when vehicle is selected
+                vehicleSelect.addEventListener('change', () => {
+                    startTrackingBtn.disabled = !vehicleSelect.value;
+                });
+            } catch (error) {
+                console.error('Error loading vehicles:', error);
+                showStatus('Failed to load vehicles', 'error');
+            }
         }
 
         async function loadStores() {
@@ -512,28 +607,31 @@
                 const response = await fetch(`${serverUrl}/api/places-of-interest`, {
                     credentials: 'include'
                 });
+                extractCSRFToken(response);  // Extract CSRF token
                 const result = await response.json();
                 const places = Array.isArray(result) ? result : (result.data || []);
 
-                storeSelect.innerHTML = '<option value="">-- Select a store --</option>';
+                // Populate visit recording dropdown
+                visitStoreSelect.innerHTML = '<option value="">-- Select a store --</option>';
+
                 places.forEach(place => {
                     const option = document.createElement('option');
                     option.value = place.id;
                     option.dataset.name = place.name;
                     option.textContent = `${place.name}${place.address ? ' - ' + place.address : ''}`;
-                    storeSelect.appendChild(option);
+                    visitStoreSelect.appendChild(option);
                 });
 
-                // Enable pin button only when both store is selected and GPS is available
-                storeSelect.addEventListener('change', updatePinButtonState);
+                // Enable button when store is selected and GPS is available
+                visitStoreSelect.addEventListener('change', updateRecordVisitButtonState);
             } catch (error) {
                 console.error('Error loading stores:', error);
                 showStatus('Failed to load stores', 'error');
             }
         }
 
-        function updatePinButtonState() {
-            pinLocationBtn.disabled = !storeSelect.value || !lastPosition;
+        function updateRecordVisitButtonState() {
+            recordVisitBtn.disabled = !visitStoreSelect.value || !lastPosition;
         }
 
         function getCurrentLocation() {
@@ -561,44 +659,65 @@
 
                     showStatus('GPS location updated', 'success');
                     refreshLocationBtn.disabled = false;
-                    updatePinButtonState();
+                    updateRecordVisitButtonState();
                 },
                 (error) => {
-                    showStatus(`GPS Error: ${error.message}`, 'error');
+                    let errorMessage = 'GPS Error: ';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage += 'Location permission denied. Please enable location access.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage += 'Location unavailable. Make sure GPS is enabled.';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage += 'GPS timeout. Try again or move to an area with better GPS signal.';
+                            break;
+                        default:
+                            errorMessage += error.message;
+                    }
+                    showStatus(errorMessage, 'error');
                     refreshLocationBtn.disabled = false;
                     gpsIndicator.classList.remove('active');
                 },
                 {
                     enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 0
+                    timeout: 30000,  // Increased timeout to 30s for better reliability
+                    maximumAge: 5000  // Allow 5s cached positions
                 }
             );
         }
 
-        async function pinLocationToStore() {
+        async function recordVisit() {
             if (!lastPosition) {
                 showStatus('Please get your current location first', 'error');
                 return;
             }
 
-            if (!storeSelect.value) {
+            if (!visitStoreSelect.value) {
                 showStatus('Please select a store', 'error');
                 return;
             }
 
             const serverUrl = serverUrlInput.value.trim();
-            const storeId = storeSelect.value;
-            const storeName = storeSelect.options[storeSelect.selectedIndex].dataset.name;
+            const storeId = visitStoreSelect.value;
+            const storeName = visitStoreSelect.options[visitStoreSelect.selectedIndex].dataset.name;
 
-            pinLocationBtn.disabled = true;
+            recordVisitBtn.disabled = true;
 
             try {
-                const response = await fetch(`${serverUrl}/api/places-of-interest/${storeId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                const headers = {
+                    'Content-Type': 'application/json',
+                };
+
+                // Include CSRF token if available
+                if (csrfToken) {
+                    headers['X-CSRF-Token'] = csrfToken;
+                }
+
+                const response = await fetch(`${serverUrl}/api/places-of-interest/${storeId}/visits`, {
+                    method: 'POST',
+                    headers: headers,
                     credentials: 'include',
                     body: JSON.stringify({
                         latitude: lastPosition.latitude,
@@ -607,18 +726,179 @@
                 });
 
                 if (response.ok) {
-                    showStatus(`✓ Location pinned to "${storeName}"!`, 'success');
-                    storeSelect.value = '';
+                    const data = await response.json();
+                    showStatus(`✓ Visit to "${storeName}" recorded!`, 'success');
+                    visitStoreSelect.value = '';
                 } else {
                     const data = await response.json();
-                    showStatus(data.error || 'Failed to pin location', 'error');
+                    showStatus(data.error || 'Failed to record visit', 'error');
                 }
             } catch (error) {
-                showStatus('Error pinning location', 'error');
-                console.error('Pin error:', error);
+                showStatus('Error recording visit', 'error');
+                console.error('Record visit error:', error);
             } finally {
-                pinLocationBtn.disabled = false;
-                updatePinButtonState();
+                recordVisitBtn.disabled = false;
+                updateRecordVisitButtonState();
+            }
+        }
+
+        async function sendGPSData(position) {
+            if (!selectedVehicle || !trackingActive) {
+                return;
+            }
+
+            lastPosition = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                accuracy: position.coords.accuracy
+            };
+
+            const serverUrl = serverUrlInput.value.trim();
+
+            try {
+                const response = await fetch(`${serverUrl}/api/gps`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        device_id: selectedVehicle.device_id,
+                        api_token: selectedVehicle.api_token,
+                        latitude: position.coords.latitude,
+                        longitude: position.coords.longitude,
+                        speed: position.coords.speed ? (position.coords.speed * 3.6) : 0 // Convert m/s to km/h
+                    })
+                });
+
+                if (response.ok) {
+                    pointsSent++;
+                    pointsSentSpan.textContent = pointsSent;
+                    lastTrackingUpdate.textContent = new Date().toLocaleTimeString();
+                    lastGPSUpdate = Date.now();
+                    console.log(`GPS data sent for ${selectedVehicle.name}`);
+                } else {
+                    console.error('Failed to send GPS data:', response.status);
+                }
+            } catch (error) {
+                console.error('Error sending GPS data:', error);
+            }
+        }
+
+        function handleGPSPosition(position) {
+            if (!trackingActive) return;
+
+            // Update UI with latest GPS info
+            document.getElementById('latitude').textContent = position.coords.latitude.toFixed(6);
+            document.getElementById('longitude').textContent = position.coords.longitude.toFixed(6);
+            document.getElementById('accuracy').textContent = position.coords.accuracy.toFixed(1);
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            gpsIndicator.classList.add('active');
+
+            // Send GPS data to server (debounced to every 30 seconds)
+            const now = Date.now();
+            if (!lastGPSUpdate || (now - lastGPSUpdate) >= 30000) {
+                sendGPSData(position);
+            }
+        }
+
+        function handleGPSError(error) {
+            console.error('GPS error:', error);
+            gpsIndicator.classList.remove('active');
+
+            let errorMessage = 'GPS error: ';
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMessage += 'Location permission denied. Please enable location access.';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMessage += 'Location unavailable. Make sure GPS is enabled.';
+                    break;
+                case error.TIMEOUT:
+                    errorMessage += 'GPS timeout. Retrying...';
+                    // Don't show error for timeout during tracking, just log it
+                    if (!trackingActive) {
+                        showStatus(errorMessage, 'error');
+                    }
+                    return;
+                default:
+                    errorMessage += error.message;
+            }
+
+            if (!trackingActive) {
+                showStatus(errorMessage, 'error');
+            }
+        }
+
+        function startTracking() {
+            if (!vehicleSelect.value) {
+                showStatus('Please select a vehicle first', 'error');
+                return;
+            }
+
+            if (!navigator.geolocation) {
+                showStatus('GPS not supported on this device', 'error');
+                return;
+            }
+
+            const deviceId = vehicleSelect.value;
+            const selectedOption = vehicleSelect.options[vehicleSelect.selectedIndex];
+            const vehicleName = selectedOption.dataset.name;
+            const apiToken = selectedOption.dataset.apiToken;
+
+            selectedVehicle = {
+                device_id: deviceId,
+                name: vehicleName,
+                api_token: apiToken
+            };
+
+            trackingActive = true;
+            pointsSent = 0;
+            lastGPSUpdate = null;
+
+            // Update UI
+            trackingVehicle.textContent = vehicleName;
+            pointsSentSpan.textContent = '0';
+            trackingStatus.classList.remove('hidden');
+            startTrackingBtn.style.display = 'none';
+            stopTrackingBtn.style.display = 'block';
+            vehicleSelect.disabled = true;
+
+            // Start continuous GPS tracking using watchPosition
+            // This is more efficient than setInterval + getCurrentPosition
+            gpsWatchId = navigator.geolocation.watchPosition(
+                handleGPSPosition,
+                handleGPSError,
+                {
+                    enableHighAccuracy: true,
+                    timeout: 30000,  // Increased timeout to 30s for better reliability
+                    maximumAge: 5000  // Allow 5s cached positions to reduce battery drain
+                }
+            );
+
+            showStatus(`✓ Tracking started for ${vehicleName}`, 'success');
+            console.log(`Tracking started for ${vehicleName} (${deviceId})`);
+        }
+
+        function stopTracking() {
+            if (gpsWatchId !== null) {
+                navigator.geolocation.clearWatch(gpsWatchId);
+                gpsWatchId = null;
+            }
+
+            trackingActive = false;
+            selectedVehicle = null;
+            lastGPSUpdate = null;
+
+            // Update UI
+            trackingStatus.classList.add('hidden');
+            startTrackingBtn.style.display = 'block';
+            stopTrackingBtn.style.display = 'none';
+            vehicleSelect.disabled = false;
+            gpsIndicator.classList.remove('active');
+
+            if (isAuthenticated) {
+                showStatus('Tracking stopped', 'info');
+                console.log('Tracking stopped');
             }
         }
 
@@ -652,6 +932,7 @@
                 const response = await fetch(`${serverUrl}/api/places-of-interest/areas`, {
                     credentials: 'include'
                 });
+                extractCSRFToken(response);  // Extract CSRF token
                 if (response.ok) {
                     const result = await response.json();
                     const existingAreas = result.areas || [];
@@ -710,6 +991,7 @@
                     `${serverUrl}/api/reverse-geocode?latitude=${lastPosition.latitude}&longitude=${lastPosition.longitude}`,
                     { credentials: 'include' }
                 );
+                extractCSRFToken(response);  // Extract CSRF token
                 if (response.ok) {
                     const geocode = await response.json();
                     if (geocode.display_name) {
@@ -742,11 +1024,18 @@
             addStoreBtn.disabled = true;
 
             try {
+                const headers = {
+                    'Content-Type': 'application/json',
+                };
+
+                // Include CSRF token if available
+                if (csrfToken) {
+                    headers['X-CSRF-Token'] = csrfToken;
+                }
+
                 const response = await fetch(`${serverUrl}/api/places-of-interest`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: headers,
                     credentials: 'include',
                     body: JSON.stringify({
                         name: storeName,
@@ -780,8 +1069,10 @@
         // Event listeners
         loginBtn.addEventListener('click', login);
         logoutBtn.addEventListener('click', logout);
+        startTrackingBtn.addEventListener('click', startTracking);
+        stopTrackingBtn.addEventListener('click', stopTracking);
         refreshLocationBtn.addEventListener('click', getCurrentLocation);
-        pinLocationBtn.addEventListener('click', pinLocationToStore);
+        recordVisitBtn.addEventListener('click', recordVisit);
         addStoreBtn.addEventListener('click', addNewStore);
 
         passwordInput.addEventListener('keypress', (e) => {

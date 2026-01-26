@@ -38,6 +38,18 @@ services:
       SMTP_PASS: ${SMTP_PASS}
       FRONTEND_URL: ${FRONTEND_URL}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      # Backblaze B2 configuration
+      B2_ENABLED: ${B2_ENABLED:-false}
+      B2_ACCOUNT_ID: ${B2_ACCOUNT_ID}
+      B2_APPLICATION_KEY: ${B2_APPLICATION_KEY}
+      B2_BUCKET_NAME: ${B2_BUCKET_NAME}
+      B2_BUCKET_TYPE: ${B2_BUCKET_TYPE:-allPrivate}
+      B2_RETENTION_DAYS: ${B2_RETENTION_DAYS:-180}
+      B2_CLEANUP_ENABLED: ${B2_CLEANUP_ENABLED:-true}
+      # Backup encryption
+      BACKUP_ENCRYPTION_PASSPHRASE: ${BACKUP_ENCRYPTION_PASSPHRASE}
+      BACKUP_EMAIL_ENABLED: ${BACKUP_EMAIL_ENABLED:-true}
+      BACKUP_EMAIL: ${BACKUP_EMAIL}
     volumes:
       - ./backups:/app/backups:z
       - ./logs:/app/logs:z
@@ -125,6 +137,8 @@ services:
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
+    environment:
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
     volumes:
       - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager-data:/alertmanager

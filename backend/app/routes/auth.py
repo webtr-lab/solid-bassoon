@@ -12,7 +12,9 @@ from app.security import (
     login_rate_limiter, log_audit_event
 )
 from app.limiter import limiter
+from app.csrf_protection import require_csrf
 from app.services.email_service import send_password_reset_email, send_password_changed_email, send_registration_confirmation_email
+from app.monitoring import record_failed_login
 from datetime import datetime, timedelta
 import os
 
@@ -33,6 +35,7 @@ def health():
 
 @auth_bp.route('/register', methods=['POST'])
 @limiter.limit("5 per hour")
+@require_csrf
 def register():
     """Register a new user"""
     try:
@@ -102,6 +105,7 @@ def register():
 
 @auth_bp.route('/login', methods=['POST'])
 @limiter.limit("10 per minute")
+@require_csrf
 def login():
     """Authenticate user and create session"""
     try:
@@ -141,6 +145,10 @@ def login():
         remaining = login_rate_limiter.get_remaining_attempts(client_ip)
         current_app.logger.warning(f"Failed login attempt for IP: {client_ip} ({remaining} attempts remaining)")
 
+        # Record metric for monitoring
+        username = data.get('username', 'unknown')
+        record_failed_login(username)
+
         return jsonify({
             'error': 'Invalid username or password',
             'remaining_attempts': remaining
@@ -153,6 +161,7 @@ def login():
 
 @auth_bp.route('/logout', methods=['POST'])
 @login_required
+@require_csrf
 def logout():
     """End user session"""
     logout_user()
@@ -178,6 +187,7 @@ def check_auth():
 
 @auth_bp.route('/change-password', methods=['POST'])
 @login_required
+@require_csrf
 def change_password():
     """Change user password"""
     try:
@@ -240,6 +250,7 @@ def change_password():
 
 @auth_bp.route('/forgot-password', methods=['POST'])
 @limiter.limit("5 per hour")
+@require_csrf
 def forgot_password():
     """Request a password reset token"""
     try:
@@ -298,6 +309,7 @@ def forgot_password():
 
 @auth_bp.route('/reset-password', methods=['POST'])
 @limiter.limit("10 per hour")
+@require_csrf
 def reset_password():
     """Reset password using a valid reset token"""
     try:
