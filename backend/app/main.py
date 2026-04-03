@@ -11,7 +11,7 @@ from app.sentry_config import init_sentry
 from app.csrf_protection import init_csrf
 from app.security import (
     validate_gps_coordinates, ValidationError, require_admin, require_manager_or_admin,
-    login_rate_limiter, validate_email, validate_password_strength, PaginationParams,
+    validate_email, validate_password_strength, PaginationParams,
     log_audit_event, validate_url
 )
 from app.routes.health import health_bp

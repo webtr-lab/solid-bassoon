@@ -179,51 +179,6 @@ def validate_username(username):
 # RATE LIMITING
 # ============================================================================
 
-class RateLimiter:
-    """
-    Simple in-memory rate limiter
-    For production, use Redis instead
-    """
-    def __init__(self, max_attempts=5, window_seconds=900):
-        self.max_attempts = max_attempts
-        self.window_seconds = window_seconds
-        self.attempts = defaultdict(list)  # ip -> list of timestamps
-    
-    def is_rate_limited(self, ip_address):
-        """Check if IP has exceeded rate limit"""
-        now = datetime.now()
-        cutoff = now - timedelta(seconds=self.window_seconds)
-        
-        # Remove old attempts outside the window
-        self.attempts[ip_address] = [
-            ts for ts in self.attempts[ip_address] 
-            if ts > cutoff
-        ]
-        
-        # Check if limit exceeded
-        if len(self.attempts[ip_address]) >= self.max_attempts:
-            return True
-        
-        return False
-    
-    def record_attempt(self, ip_address):
-        """Record an attempt for an IP"""
-        self.attempts[ip_address].append(datetime.now())
-    
-    def get_remaining_attempts(self, ip_address):
-        """Get remaining attempts before rate limit"""
-        now = datetime.now()
-        cutoff = now - timedelta(seconds=self.window_seconds)
-        
-        self.attempts[ip_address] = [
-            ts for ts in self.attempts[ip_address] 
-            if ts > cutoff
-        ]
-        
-        return max(0, self.max_attempts - len(self.attempts[ip_address]))
-
-# Initialize rate limiters
-login_rate_limiter = RateLimiter(max_attempts=5, window_seconds=900)  # 5 attempts per 15 min
 
 # ============================================================================
 # PASSWORD UTILITIES

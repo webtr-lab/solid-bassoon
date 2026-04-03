@@ -9,7 +9,7 @@ from flask_bcrypt import Bcrypt
 from app.models import db, User, PasswordResetToken
 from app.security import (
     ValidationError, validate_email, validate_password_strength,
-    login_rate_limiter, log_audit_event
+    log_audit_event
 )
 from app.limiter import limiter
 from app.csrf_protection import require_csrf, csrf_exempt
@@ -104,7 +104,7 @@ def register():
 
 
 @auth_bp.route('/login', methods=['POST'])
-@limiter.limit("10 per minute")
+@limiter.limit("5 per 15 minutes")
 @csrf_exempt
 def login():
     """Authenticate user and create session"""
@@ -112,13 +112,6 @@ def login():
         # Rate limiting: max 5 failed attempts per 15 minutes per IP
         client_ip = request.remote_addr
 
-        if login_rate_limiter.is_rate_limited(client_ip):
-            current_app.logger.warning(f"Login rate limit exceeded for IP: {client_ip}")
-            remaining = login_rate_limiter.get_remaining_attempts(client_ip)
-            return jsonify({
-                'error': 'Too many login attempts. Please try again in 15 minutes.',
-                'remaining_attempts': remaining
-            }), 429  # Too Many Requests
 
         data = request.json
         user = User.query.filter_by(username=data['username']).first()
@@ -126,7 +119,6 @@ def login():
         bcrypt = get_bcrypt()
         if user and bcrypt.check_password_hash(user.password_hash, data['password']):
             # Reset rate limiter on successful login
-            login_rate_limiter.attempts[client_ip] = []
             login_user(user, remember=True)
             current_app.logger.info(f"Successful login for user: {user.username}")
             return jsonify({
@@ -141,8 +133,6 @@ def login():
             })
 
         # Record failed attempt
-        login_rate_limiter.record_attempt(client_ip)
-        remaining = login_rate_limiter.get_remaining_attempts(client_ip)
         current_app.logger.warning(f"Failed login attempt for IP: {client_ip} ({remaining} attempts remaining)")
 
         # Record metric for monitoring
@@ -151,7 +141,6 @@ def login():
 
         return jsonify({
             'error': 'Invalid username or password',
-            'remaining_attempts': remaining
         }), 401
 
     except Exception as e:
