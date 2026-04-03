@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Store Location Tracker</title>
+    <title>Business Location Tracker</title>
     <style>
         * {
             margin: 0;
@@ -191,7 +191,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>📍 Store Location Tracker</h1>
+        <h1>📍 Business Location Tracker</h1>
         <p class="subtitle">Pin business locations on the map</p>
 
         <!-- Login Card -->
@@ -240,16 +240,16 @@
                 <button id="logoutBtn" class="btn" style="padding: 8px 16px; width: auto; font-size: 14px; background: #6b7280; color: white;">Logout</button>
             </div>
 
-            <!-- Vehicle Tracking Section -->
-            <div class="section-header" style="margin-top: 0;">🚗 Vehicle Tracking</div>
+            <!-- Asset Tracking Section -->
+            <div class="section-header" style="margin-top: 0;">🚚 Asset Tracking</div>
             <div class="instruction">
-                Select your vehicle and start tracking to send live GPS updates to the dashboard.
+                Select your asset and start tracking to send live GPS updates to the dashboard.
             </div>
 
             <div class="form-group">
-                <label for="vehicleSelect">Select Vehicle</label>
+                <label for="vehicleSelect">Select Asset</label>
                 <select id="vehicleSelect">
-                    <option value="">-- Select your vehicle --</option>
+                    <option value="">-- Select your asset --</option>
                 </select>
             </div>
 
@@ -258,7 +258,7 @@
                     <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #10b981; margin-right: 8px; animation: pulse 2s infinite;"></span>
                     Tracking Active
                 </div>
-                <div><strong>Vehicle:</strong> <span id="trackingVehicle">--</span></div>
+                <div><strong>Asset:</strong> <span id="trackingVehicle">--</span></div>
                 <div><strong>Last Update:</strong> <span id="lastTrackingUpdate">--</span></div>
                 <div><strong>Points Sent:</strong> <span id="pointsSent">0</span></div>
             </div>
@@ -283,28 +283,28 @@
 
             <div id="status" class="status hidden"></div>
 
-            <!-- Record Visit to Store -->
-            <div class="section-header">Record Visit to Store</div>
+            <!-- Record Visit to Business -->
+            <div class="section-header">Record Visit to Business</div>
             <div class="instruction">
-                Select a store and click "Record Visit" to log that you visited this location at the current time.
+                Select a business and click "Record Visit" to log that you visited this location at the current time.
             </div>
 
             <div class="form-group">
-                <label for="visitStoreSelect">Select Store for Visit</label>
+                <label for="visitStoreSelect">Select Business for Visit</label>
                 <select id="visitStoreSelect">
-                    <option value="">-- Loading stores --</option>
+                    <option value="">-- Loading businesses --</option>
                 </select>
             </div>
 
             <button id="recordVisitBtn" class="btn btn-primary" disabled>✓ Record Visit</button>
 
-            <!-- Add New Store -->
-            <div class="section-header">Add New Store Location</div>
+            <!-- Add New Business -->
+            <div class="section-header">Add New Business Location</div>
             <div class="instruction">
-                Create a new store location at your current GPS position. Fill in the store details below.
+                Create a new business location at your current GPS position. Fill in the business details below.
             </div>
 
-            <button id="addStoreBtn" class="btn btn-warning">➕ Add New Store</button>
+            <button id="addStoreBtn" class="btn btn-warning">➕ Add New Business</button>
         </div>
     </div>
 
@@ -378,7 +378,7 @@
         }
 
         document.getElementById('detectedUrl').textContent = detectedUrl;
-        console.log(`[Store Tracker] Detected Server URL: ${detectedUrl}`);
+        console.log(`[Business Tracker] Detected Server URL: ${detectedUrl}`);
 
         function showLoginStatus(message, type) {
             loginStatus.textContent = message;
@@ -579,7 +579,7 @@
                 // Sort vehicles by name in ascending order
                 vehicles.sort((a, b) => a.name.localeCompare(b.name));
 
-                vehicleSelect.innerHTML = '<option value="">-- Select your vehicle --</option>';
+                vehicleSelect.innerHTML = '<option value="">-- Select your asset --</option>';
                 vehicles.forEach(vehicle => {
                     const option = document.createElement('option');
                     option.value = vehicle.device_id;
@@ -595,7 +595,7 @@
                 });
             } catch (error) {
                 console.error('Error loading vehicles:', error);
-                showStatus('Failed to load vehicles', 'error');
+                showStatus('Failed to load assets', 'error');
             }
         }
 
@@ -612,7 +612,7 @@
                 const places = Array.isArray(result) ? result : (result.data || []);
 
                 // Populate visit recording dropdown
-                visitStoreSelect.innerHTML = '<option value="">-- Select a store --</option>';
+                visitStoreSelect.innerHTML = '<option value="">-- Select a business --</option>';
 
                 places.forEach(place => {
                     const option = document.createElement('option');
@@ -626,7 +626,7 @@
                 visitStoreSelect.addEventListener('change', updateRecordVisitButtonState);
             } catch (error) {
                 console.error('Error loading stores:', error);
-                showStatus('Failed to load stores', 'error');
+                showStatus('Failed to load businesses', 'error');
             }
         }
 
@@ -695,7 +695,7 @@
             }
 
             if (!visitStoreSelect.value) {
-                showStatus('Please select a store', 'error');
+                showStatus('Please select a business', 'error');
                 return;
             }
 
@@ -831,7 +831,7 @@
 
         function startTracking() {
             if (!vehicleSelect.value) {
-                showStatus('Please select a vehicle first', 'error');
+                showStatus('Please select an asset first', 'error');
                 return;
             }
 
@@ -976,11 +976,11 @@
             }
 
             if (!isAuthenticated) {
-                showStatus('You must be logged in to add stores', 'error');
+                showStatus('You must be logged in to add businesses', 'error');
                 return;
             }
 
-            const storeName = prompt('Enter store name:', 'New Store');
+            const storeName = prompt('Enter business name:', 'New Business');
             if (!storeName) return;
 
             // Fetch geocoded address from coordinates
@@ -1052,14 +1052,14 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    showStatus(`✓ Store "${storeName}" added successfully!`, 'success');
+                    showStatus(`✓ Business "${storeName}" added successfully!`, 'success');
                     loadStores(); // Refresh store list
                 } else {
                     const data = await response.json();
-                    showStatus(data.error || 'Failed to add store', 'error');
+                    showStatus(data.error || 'Failed to add business', 'error');
                 }
             } catch (error) {
-                showStatus('Error adding store', 'error');
+                showStatus('Error adding business', 'error');
                 console.error('Error:', error);
             } finally {
                 addStoreBtn.disabled = false;

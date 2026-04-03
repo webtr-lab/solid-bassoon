@@ -13,7 +13,7 @@ interface UserFormData {
   username: string;
   email: string;
   password: string;
-  role: 'admin' | 'manager' | 'viewer';
+  role: 'admin' | 'manager' | 'operator' | 'viewer';
   is_active: boolean;
 }
 
@@ -102,7 +102,7 @@ function UserManagement(): JSX.Element {
     .filter(user => {
       const matchesSearch = searchQuery === '' ||
         user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase());
+        (user.email && user.email.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesRole = roleFilter === 'all' || user.role === roleFilter;
       const matchesStatus = statusFilter === 'all' ||
         (statusFilter === 'active' && user.is_active) ||
@@ -115,7 +115,7 @@ function UserManagement(): JSX.Element {
     setEditingUser(user);
     setFormData({
       username: user.username,
-      email: user.email,
+      email: user.email || '',
       password: '',
       role: user.role,
       is_active: user.is_active

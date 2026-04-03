@@ -90,7 +90,7 @@ function VehicleMarkersLayer({
               <div className="text-sm">
                 <strong>{vehicle.name}</strong>
                 <br />
-                Speed: {vehicle.lastLocation.speed.toFixed(1)} km/h
+                Speed: {(vehicle.lastLocation.speed ?? 0).toFixed(1)} km/h
                 <br />
                 Time: {new Date(vehicle.lastLocation.timestamp).toLocaleString()}
               </div>
@@ -129,7 +129,7 @@ function VehicleMarkersLayer({
             >
               <Popup>
                 <div className="text-xs">
-                  Speed: {loc.speed.toFixed(1)} km/h
+                  Speed: {(loc.speed ?? 0).toFixed(1)} km/h
                   <br />
                   {new Date(loc.timestamp).toLocaleString()}
                 </div>

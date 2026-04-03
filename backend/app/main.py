@@ -1,15 +1,13 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_bcrypt import Bcrypt
 from flask_migrate import Migrate
-from flask_socketio import SocketIO
 from app.config import Config
-from app.models import db, Vehicle, Location, SavedLocation, User, PlaceOfInterest
+from app.models import db, Vehicle, User
 from app.limiter import limiter
 from app.logging_config import setup_logging
 from app.sentry_config import init_sentry
-from app.websocket_events import register_websocket_events
 from app.csrf_protection import init_csrf
 from app.security import (
     validate_gps_coordinates, ValidationError, require_admin, require_manager_or_admin,
@@ -32,11 +30,7 @@ from app.services.data_retention_service import run_full_cleanup
 from app.monitoring import init_metrics, update_database_metrics, update_system_metrics
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
-import math
 import os
-import subprocess
-import glob
-import tempfile
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -67,17 +61,6 @@ init_email(app)
 init_metrics(app)
 init_csrf(app)
 
-# Initialize WebSocket support
-socketio = SocketIO(
-    app,
-    cors_allowed_origins=cors_origins,
-    async_mode='threading',
-    ping_timeout=60,
-    ping_interval=25,
-    logger=False,
-    engineio_logger=False
-)
-register_websocket_events(socketio)
 
 # Register blueprints
 app.register_blueprint(health_bp)
@@ -118,9 +101,6 @@ def add_security_headers(response):
 
     # HTTP Strict Transport Security - force HTTPS for 1 year
     response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-
-    # Don't expose server details
-    response.headers['Server'] = 'MapsTracker'
 
     # Referrer policy
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'

@@ -227,7 +227,7 @@ fi
 
 # Check if HTTPS is working
 if command -v curl &> /dev/null; then
-    if curl -sSf -o /dev/null https://maps.praxisnetworking.com 2>/dev/null; then
+    if curl -sSf -o /dev/null https://maps.devnan.com 2>/dev/null; then
         check_pass "HTTPS endpoint is accessible"
     else
         check_warn "Cannot verify HTTPS endpoint accessibility"

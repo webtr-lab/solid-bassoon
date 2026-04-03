@@ -23,8 +23,8 @@ interface TabNavigationProps {
 function TabNavigation({ activeTab, setActiveTab, currentUserRole }: TabNavigationProps): JSX.Element {
   const tabs: Tab[] = [
     { id: 'users', label: 'Users', adminOnly: true },
-    { id: 'vehicles', label: 'Vehicles', adminOnly: false },
-    { id: 'poi', label: 'Places of Interest', adminOnly: false },
+    { id: 'vehicles', label: 'Fleet', adminOnly: false },
+    { id: 'poi', label: 'Businesses', adminOnly: false },
     { id: 'reports', label: 'Reports', adminOnly: false },
   ];
 

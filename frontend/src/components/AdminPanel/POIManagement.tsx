@@ -132,9 +132,9 @@ function POIManagement() {
       <div className="mb-6">
         <div className="flex justify-between items-start">
           <div>
-            <h2 className="text-2xl font-bold mb-2">Places of Interest</h2>
+            <h2 className="text-2xl font-bold mb-2">Businesses</h2>
             <p className="text-sm text-gray-600">
-              Edit existing places. To add new places, use the map search or pin location features.
+              Edit existing businesses. To add new businesses, use the map search or pin location features.
             </p>
           </div>
           {selectedIds.length > 0 && (

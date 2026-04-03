@@ -26,6 +26,8 @@ export interface Vehicle {
   name: string;
   api_token?: string;
   description?: string;
+  is_active?: boolean;
+  entity_type?: 'vehicle' | 'sales_rep';
   created_at?: string;
   updated_at?: string;
 }
@@ -46,16 +48,23 @@ export interface SavedLocation {
   longitude: number;
   name?: string;
   description?: string;
+  notes?: string;
+  area?: string;
   timestamp: string;
   created_at?: string;
+  visit_type?: string;
+  stop_duration_minutes?: number;
 }
+
+export type UserRole = 'admin' | 'manager' | 'operator' | 'viewer';
 
 export interface User {
   id: number;
   username: string;
   email?: string;
-  role: 'admin' | 'manager' | 'viewer';
-  active: boolean;
+  role: UserRole;
+  is_active: boolean;
+  active?: boolean; // Alias for frontend compatibility
   must_change_password?: boolean;
   created_at?: string;
   last_login?: string;

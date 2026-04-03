@@ -56,7 +56,7 @@ function Map({
   savedLocations,
   placesOfInterest,
   onRefreshPOI,
-  currentUserRole,
+  currentUserRole = 'viewer',
   onPlaceClick,
   center: initialCenter,
   zoom: initialZoom,
@@ -320,7 +320,7 @@ function Map({
       <AddPlaceModal
         isOpen={showAddPlaceModal}
         coordinates={pendingPlace}
-        initialData={placeInitialData}
+        initialData={placeInitialData || undefined}
         onSave={handleSavePlace}
         onCancel={handleCancelAddPlace}
       />

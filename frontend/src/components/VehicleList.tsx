@@ -34,6 +34,7 @@ interface VehicleListProps {
   onSelectVehicle: (vehicle: VehicleWithLocation | null) => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  entityLabel?: string;
 }
 
 function VehicleList({
@@ -41,12 +42,21 @@ function VehicleList({
   selectedVehicle,
   onSelectVehicle,
   collapsed = false,
-  onToggleCollapse
+  onToggleCollapse,
+  entityLabel = 'Vehicle'
 }: VehicleListProps): JSX.Element {
+  // Transform display name based on entity type
+  const getDisplayName = (name: string): string => {
+    if (entityLabel === 'Sales Rep') {
+      // Replace "Vehicle" with "Sales" in the name
+      return name.replace(/Vehicle/gi, 'Sales');
+    }
+    return name;
+  };
   return (
     <div className="bg-white rounded-lg shadow p-4">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">Vehicles ({vehicles.length})</h2>
+        <h2 className="text-xl font-bold">{entityLabel}s ({vehicles.length})</h2>
         {onToggleCollapse && (
           <button
             onClick={onToggleCollapse}
@@ -80,7 +90,7 @@ function VehicleList({
             <div className="flex items-center gap-3">
               <div className={`w-4 h-4 rounded-full ${vehicleColors[idx % vehicleColors.length]}`}></div>
               <div className="flex-1">
-                <div className="font-semibold">{vehicle.name}</div>
+                <div className="font-semibold">{getDisplayName(vehicle.name)}</div>
                 {vehicle.lastLocation && (
                   <div className="text-sm text-gray-600">
                     Speed: {vehicle.lastLocation.speed.toFixed(1)} km/h
@@ -105,7 +115,7 @@ function VehicleList({
           onClick={() => onSelectVehicle(null)}
           className="w-full mt-4 px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium"
         >
-          Show All Vehicles
+          Show All {entityLabel}s
         </button>
       )}
     </div>

@@ -11,16 +11,29 @@ interface SelectedVehicle {
 }
 
 /**
+ * Extended vehicle type with last location
+ */
+interface VehicleWithLocation extends Vehicle {
+  lastLocation?: {
+    latitude: number;
+    longitude: number;
+    speed: number;
+    timestamp: string;
+  };
+}
+
+/**
  * VehicleListSection Component
  * Wraps VehicleList with collapse/expand toggle
  * Part of the TrackingPanel sidebar
  */
 interface VehicleListSectionProps {
-  vehicles: Vehicle[];
+  vehicles: VehicleWithLocation[];
   selectedVehicle: SelectedVehicle | null;
-  onSelectVehicle: (vehicle: Vehicle) => void;
+  onSelectVehicle: (vehicle: VehicleWithLocation | null) => void;
   collapsed?: boolean;
   onToggleCollapse: () => void;
+  entityLabel?: string;
 }
 
 function VehicleListSection({
@@ -28,7 +41,8 @@ function VehicleListSection({
   selectedVehicle,
   onSelectVehicle,
   collapsed = false,
-  onToggleCollapse
+  onToggleCollapse,
+  entityLabel = 'Vehicle'
 }: VehicleListSectionProps): JSX.Element {
   return (
     <div>
@@ -38,6 +52,7 @@ function VehicleListSection({
         onSelectVehicle={onSelectVehicle}
         collapsed={collapsed}
         onToggleCollapse={onToggleCollapse}
+        entityLabel={entityLabel}
       />
     </div>
   );

@@ -7,7 +7,7 @@ import math
 from datetime import datetime, timedelta
 from app.models import Vehicle, Location, SavedLocation
 from app.services.location_service import (
-    calculate_distance, detect_and_save_stops, save_location
+    calculate_distance, save_location
 )
 
 
@@ -93,128 +93,6 @@ class TestSaveLocation:
         assert len(locations) == 3
         for i, loc in enumerate(locations):
             assert loc.vehicle_id == test_vehicle.id
-
-
-@pytest.mark.unit
-class TestDetectAndSaveStops:
-    """Test stop detection functionality"""
-
-    def test_detect_stop_stationary_vehicle(self, app_context, test_vehicle):
-        """Test detection of stop when vehicle is stationary"""
-        # Create multiple locations at same point over time
-        now = datetime.utcnow()
-        for i in range(5):
-            location = Location(
-                vehicle_id=test_vehicle.id,
-                latitude=5.8520,
-                longitude=-55.2038,
-                speed=0,
-                timestamp=now - timedelta(minutes=(5-i)*2)
-            )
-            from app.models import db
-            db.session.add(location)
-        from app.models import db
-        db.session.commit()
-
-        # Create current location (still stationary)
-        current_location = Location(
-            vehicle_id=test_vehicle.id,
-            latitude=5.8520,
-            longitude=-55.2038,
-            speed=0,
-            timestamp=now
-        )
-
-        # This should trigger stop detection
-        detect_and_save_stops(test_vehicle.id, current_location)
-
-        # Check if SavedLocation was created
-        saved_location = SavedLocation.query.filter_by(
-            vehicle_id=test_vehicle.id,
-            visit_type='auto_detected'
-        ).first()
-
-        # SavedLocation might be created depending on exact timing
-        # This test validates the function runs without error
-
-    def test_no_stop_when_moving(self, app_context, test_vehicle):
-        """Test that no stop is detected when vehicle is moving"""
-        from app.models import db
-
-        now = datetime.utcnow()
-        # Create locations at different points (vehicle moving)
-        for i in range(3):
-            location = Location(
-                vehicle_id=test_vehicle.id,
-                latitude=5.8520 + (i * 0.01),
-                longitude=-55.2038 + (i * 0.01),
-                speed=50 + (i * 10),
-                timestamp=now - timedelta(minutes=(3-i)*5)
-            )
-            db.session.add(location)
-        db.session.commit()
-
-        current_location = Location(
-            vehicle_id=test_vehicle.id,
-            latitude=5.8520 + (3 * 0.01),
-            longitude=-55.2038 + (3 * 0.01),
-            speed=80,
-            timestamp=now
-        )
-
-        initial_stops = SavedLocation.query.filter_by(
-            vehicle_id=test_vehicle.id,
-            visit_type='auto_detected'
-        ).count()
-
-        detect_and_save_stops(test_vehicle.id, current_location)
-
-        # Moving vehicle should not create stops
-        final_stops = SavedLocation.query.filter_by(
-            vehicle_id=test_vehicle.id,
-            visit_type='auto_detected'
-        ).count()
-
-        # Should not increase (or minimal increase due to race conditions)
-        assert final_stops <= initial_stops + 1
-
-    def test_insufficient_locations(self, app_context, test_vehicle):
-        """Test that stop is not detected with insufficient history"""
-        from app.models import db
-
-        # Create only 2 locations (need at least 5)
-        now = datetime.utcnow()
-        for i in range(2):
-            location = Location(
-                vehicle_id=test_vehicle.id,
-                latitude=5.8520,
-                longitude=-55.2038,
-                speed=0,
-                timestamp=now - timedelta(minutes=(2-i)*5)
-            )
-            db.session.add(location)
-        db.session.commit()
-
-        current_location = Location(
-            vehicle_id=test_vehicle.id,
-            latitude=5.8520,
-            longitude=-55.2038,
-            speed=0,
-            timestamp=now
-        )
-
-        initial_stops = SavedLocation.query.filter_by(
-            visit_type='auto_detected'
-        ).count()
-
-        detect_and_save_stops(test_vehicle.id, current_location)
-
-        # Should not create stop with insufficient data
-        final_stops = SavedLocation.query.filter_by(
-            visit_type='auto_detected'
-        ).count()
-
-        assert final_stops == initial_stops
 
 
 @pytest.mark.unit

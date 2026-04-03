@@ -8,7 +8,7 @@ from flask_login import login_required, current_user
 from app.models import db, Vehicle, SavedLocation
 from app.security import (
     ValidationError, validate_gps_coordinates, require_manager_or_admin,
-    PaginationParams, log_audit_event
+    require_operator_or_above, PaginationParams, log_audit_event
 )
 from app.csrf_protection import require_csrf
 from app.limiter import limiter
@@ -39,11 +39,18 @@ def list_vehicles():
         # Check if admin is requesting all vehicles (for admin panel)
         include_inactive = request.args.get('include_inactive', 'false').lower() == 'true'
 
+        # Filter by entity type (vehicle or sales_rep)
+        entity_type = request.args.get('type')  # 'vehicle' or 'sales_rep'
+
         # Build query - show all vehicles if include_inactive=true, otherwise show only active
         if include_inactive:
             query = Vehicle.query
         else:
             query = Vehicle.query.filter_by(is_active=True)
+
+        # Apply entity type filter if specified
+        if entity_type:
+            query = query.filter_by(entity_type=entity_type)
 
         total_count = query.count()
 
@@ -79,7 +86,8 @@ def create_new_vehicle():
         vehicle = create_vehicle(
             name=data['name'],
             device_id=data['device_id'],
-            is_active=data.get('is_active', True)
+            is_active=data.get('is_active', True),
+            entity_type=data.get('entity_type', 'vehicle')
         )
 
         if not vehicle:
@@ -135,7 +143,8 @@ def update_vehicle_info(vehicle_id):
             vehicle_id,
             name=data.get('name'),
             device_id=data.get('device_id'),
-            is_active=data.get('is_active')
+            is_active=data.get('is_active'),
+            entity_type=data.get('entity_type')
         )
 
         if not vehicle:
@@ -328,6 +337,7 @@ def get_saved_locations(vehicle_id):
 
 @vehicles_bp.route('/<int:vehicle_id>/saved-locations', methods=['POST'])
 @login_required
+@require_operator_or_above
 @require_csrf
 def save_location(vehicle_id):
     """Manually save a location for a vehicle"""

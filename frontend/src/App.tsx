@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react';
 import React, { useState, useEffect } from 'react';
 import Map from './components/Map';
 import TrackingPanel from './components/TrackingPanel';
@@ -7,7 +8,6 @@ import AdminPanel from './components/AdminPanel';
 import Login from './components/Login';
 import ChangePasswordModal from './components/ChangePasswordModal';
 import ErrorAlert from './components/ErrorAlert';
-import ErrorBoundary from './components/ErrorBoundary';
 import { useAuth } from './hooks/useAuth';
 import { useFetchVehicles } from './hooks/useFetchVehicles';
 import { useVehicleDetails } from './hooks/useVehicleDetails';
@@ -16,7 +16,7 @@ import { MAP_CONFIG, ADMIN_ROLES } from './constants';
 import { initTimeSync } from './utils/timeSync';
 import { Vehicle, PlaceOfInterest, Location, User } from './types';
 
-type ViewType = 'stores' | 'tracking' | 'admin';
+type ViewType = 'stores' | 'tracking' | 'sales_reps' | 'admin';
 
 interface VehicleWithLocation extends Vehicle {
   lastLocation?: Location;
@@ -50,13 +50,24 @@ function App() {
   const [showVehiclesOnMap, setShowVehiclesOnMap] = useState<boolean>(true);
   const [selectedStore, setSelectedStore] = useState<PlaceOfInterest | null>(null);
 
-  // Data fetching hooks
+  // Data fetching hooks - vehicles
   const {
     vehicles,
     error: vehiclesError,
     setError: setVehiclesError,
     fetchVehicles
-  } = useFetchVehicles(isAuthenticated, activeView);
+  } = useFetchVehicles(isAuthenticated, activeView, 'vehicle');
+
+  // Data fetching hooks - sales reps
+  const {
+    vehicles: salesReps,
+    error: salesRepsError,
+    setError: setSalesRepsError,
+    fetchVehicles: fetchSalesReps
+  } = useFetchVehicles(isAuthenticated, activeView, 'sales_rep');
+
+  // Sales rep history hours state
+  const [salesRepHistoryHours, setSalesRepHistoryHours] = useState<number>(24);
 
   const {
     selectedVehicle,
@@ -66,6 +77,15 @@ function App() {
     fetchSavedLocations
   } = useVehicleDetails(isAuthenticated, historyHours);
 
+  // Sales rep details hook
+  const {
+    selectedVehicle: selectedSalesRep,
+    vehicleHistory: salesRepHistory,
+    savedLocations: salesRepSavedLocations,
+    setSelectedVehicle: setSelectedSalesRepInternal,
+    fetchSavedLocations: fetchSalesRepSavedLocations
+  } = useVehicleDetails(isAuthenticated, salesRepHistoryHours);
+
   const {
     placesOfInterest,
     isLoading: placesLoading,
@@ -74,8 +94,8 @@ function App() {
   } = useFetchPlaces(isAuthenticated, activeView);
 
   // Combine errors
-  const error = authError || vehiclesError || placesError;
-  const setError = authError ? setAuthError : setVehiclesError;
+  const error = authError || vehiclesError || salesRepsError || placesError;
+  const setError = authError ? setAuthError : vehiclesError ? setVehiclesError : setSalesRepsError;
 
   // Initialize server time synchronization on app load
   useEffect(() => {
@@ -91,6 +111,20 @@ function App() {
       setMapZoom(15); // Zoom in closer to see details
     } else if (!vehicle) {
       // Reset map center/zoom when deselecting vehicle
+      setMapCenter(MAP_CONFIG.DEFAULT_CENTER);
+      setMapZoom(MAP_CONFIG.DEFAULT_ZOOM);
+    }
+  };
+
+  const handleSelectSalesRep = (salesRep: VehicleWithLocation | null): void => {
+    setSelectedSalesRepInternal(salesRep);
+
+    if (salesRep && salesRep.lastLocation) {
+      // Zoom to sales rep's current location
+      setMapCenter([salesRep.lastLocation.latitude, salesRep.lastLocation.longitude]);
+      setMapZoom(15); // Zoom in closer to see details
+    } else if (!salesRep) {
+      // Reset map center/zoom when deselecting sales rep
       setMapCenter(MAP_CONFIG.DEFAULT_CENTER);
       setMapZoom(MAP_CONFIG.DEFAULT_ZOOM);
     }
@@ -140,7 +174,7 @@ function App() {
   }
 
   return (
-    <ErrorBoundary>
+    <Sentry.ErrorBoundary>
       <div className="h-screen flex flex-col bg-gray-100">
       <ErrorAlert message={error} onDismiss={() => setError(null)} />
       <header className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 shadow-lg">
@@ -158,7 +192,7 @@ function App() {
                   : 'bg-blue-700 text-white hover:bg-blue-800'
               }`}
             >
-              📍 Store Locations
+              📍 Business Locations
             </button>
             <button
               onClick={() => setActiveView('tracking')}
@@ -168,7 +202,17 @@ function App() {
                   : 'bg-blue-700 text-white hover:bg-blue-800'
               }`}
             >
-              🚗 Vehicle Tracking
+              🚚 Vehicle Tracking
+            </button>
+            <button
+              onClick={() => setActiveView('sales_reps')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                activeView === 'sales_reps'
+                  ? 'bg-white text-blue-600'
+                  : 'bg-blue-700 text-white hover:bg-blue-800'
+              }`}
+            >
+              👤 Sales Reps
             </button>
             {canAccessAdmin(currentUser?.role) && (
               <button
@@ -265,6 +309,41 @@ function App() {
             />
           </main>
         </div>
+      ) : activeView === 'sales_reps' ? (
+        <div className="flex-1 flex gap-4 p-4 overflow-hidden">
+          <TrackingPanel
+            vehicles={salesReps}
+            selectedVehicle={selectedSalesRep}
+            onSelectVehicle={handleSelectSalesRep}
+            savedLocations={salesRepSavedLocations}
+            historyHours={salesRepHistoryHours}
+            onHistoryHoursChange={setSalesRepHistoryHours}
+            onRefreshLocations={() => {
+              if (selectedSalesRep) {
+                fetchSalesRepSavedLocations(selectedSalesRep.id);
+              }
+            }}
+            showVehiclesOnMap={showVehiclesOnMap}
+            onToggleShowVehicles={setShowVehiclesOnMap}
+            entityLabel="Sales Rep"
+          />
+
+          <main className="flex-1 bg-white rounded-lg shadow overflow-hidden">
+            <Map
+              vehicles={salesReps}
+              selectedVehicle={selectedSalesRep}
+              vehicleHistory={salesRepHistory}
+              savedLocations={salesRepSavedLocations}
+              placesOfInterest={[]}
+              onRefreshPOI={() => {}}
+              currentUserRole={currentUser?.role}
+              center={mapCenter}
+              zoom={mapZoom}
+              showVehicles={showVehiclesOnMap}
+              showPlaces={false}
+            />
+          </main>
+        </div>
       ) : (
         canAccessAdmin(currentUser?.role) ? (
           <div className="flex-1 overflow-hidden">
@@ -282,7 +361,7 @@ function App() {
         )
       )}
       </div>
-    </ErrorBoundary>
+    </Sentry.ErrorBoundary>
   );
 }
 

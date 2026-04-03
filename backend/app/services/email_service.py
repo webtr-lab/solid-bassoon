@@ -117,7 +117,7 @@ def send_registration_confirmation_email(user, login_url):
 
     try:
         # Admin email for BCC
-        admin_email = os.getenv('ADMIN_EMAIL', 'ginmardo.a@gmail.com')
+        admin_email = os.getenv('ADMIN_EMAIL', '')
 
         email_body = f"""
         <h2>Welcome to Maps Tracker!</h2>
@@ -141,7 +141,7 @@ def send_registration_confirmation_email(user, login_url):
         msg = Message(
             subject='Welcome to Maps Tracker - Account Created',
             recipients=[user.email],
-            bcc=[admin_email],  # BCC to admin
+            bcc=[admin_email] if admin_email else [],  # BCC to admin if configured
             html=email_body
         )
 

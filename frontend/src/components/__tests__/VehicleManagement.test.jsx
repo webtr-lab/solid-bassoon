@@ -20,8 +20,8 @@ describe('VehicleManagement Component', () => {
     });
 
     render(<VehicleManagement />);
-    expect(screen.getByText('Vehicle Management')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /add vehicle/i })).toBeInTheDocument();
+    expect(screen.getByText('Field Assets')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add asset/i })).toBeInTheDocument();
   });
 
   test('fetches and displays vehicles on mount', async () => {
@@ -87,7 +87,7 @@ describe('VehicleManagement Component', () => {
 
     render(<VehicleManagement />);
 
-    const addButton = screen.getByRole('button', { name: /add vehicle/i });
+    const addButton = screen.getByRole('button', { name: /add asset/i });
     fireEvent.click(addButton);
 
     // Modal should be visible
@@ -121,7 +121,7 @@ describe('VehicleManagement Component', () => {
 
     render(<VehicleManagement />);
 
-    const addButton = screen.getByRole('button', { name: /add vehicle/i });
+    const addButton = screen.getByRole('button', { name: /add asset/i });
     fireEvent.click(addButton);
 
     // Fill in form fields

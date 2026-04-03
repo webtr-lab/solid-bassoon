@@ -37,7 +37,7 @@ interface ReportData {
 
 /**
  * VisitsReport Component
- * Generates detailed reports of vehicle visits to locations
+ * Generates detailed reports of asset visits to locations
  * Includes filters and CSV export functionality
  */
 function VisitsReport(): JSX.Element {
@@ -124,7 +124,7 @@ function VisitsReport(): JSX.Element {
     if (!report) return;
 
     // CSV header
-    const headers = ['Location Name', 'Area', 'Latitude', 'Longitude', 'Visit Count', 'Vehicle Name', 'Timestamp', 'Notes'];
+    const headers = ['Location Name', 'Area', 'Latitude', 'Longitude', 'Visit Count', 'Asset Name', 'Timestamp', 'Notes'];
     const rows: string[][] = [];
 
     // Add data rows
@@ -200,7 +200,7 @@ function VisitsReport(): JSX.Element {
             type="date"
             value={startDate}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setStartDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full h-[42px] px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
@@ -210,7 +210,7 @@ function VisitsReport(): JSX.Element {
             type="date"
             value={endDate}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setEndDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full h-[42px] px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
@@ -221,18 +221,18 @@ function VisitsReport(): JSX.Element {
             value={areaFilter}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setAreaFilter(e.target.value)}
             placeholder="e.g., Centrum"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full h-[42px] px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Vehicle (Optional)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Asset (Optional)</label>
           <select
             value={vehicleFilter}
             onChange={(e: ChangeEvent<HTMLSelectElement>) => setVehicleFilter(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full h-[42px] px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">All Vehicles</option>
+            <option value="">All Assets</option>
             {vehicles.map((vehicle) => (
               <option key={vehicle.id} value={vehicle.id}>
                 {vehicle.name}
@@ -242,13 +242,13 @@ function VisitsReport(): JSX.Element {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Place (Optional)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Business (Optional)</label>
           <select
             value={placeFilter}
             onChange={(e: ChangeEvent<HTMLSelectElement>) => setPlaceFilter(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full h-[42px] px-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">All Places</option>
+            <option value="">All Businesses</option>
             {places.map((place) => (
               <option key={place.id} value={place.id}>
                 {place.name}
@@ -257,11 +257,12 @@ function VisitsReport(): JSX.Element {
           </select>
         </div>
 
-        <div className="flex items-end">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">&nbsp;</label>
           <button
             onClick={fetchReport}
             disabled={loading}
-            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium disabled:opacity-50"
+            className="w-full h-[42px] px-3 border border-blue-600 bg-blue-600 hover:bg-blue-700 hover:border-blue-700 text-white rounded-lg font-medium disabled:opacity-50"
           >
             {loading ? 'Loading...' : 'Generate'}
           </button>
@@ -342,7 +343,7 @@ function VisitsReport(): JSX.Element {
                   {expandedLocations.has(idx) && (
                     <div className="bg-white border-t border-gray-200 p-4">
                       <div className="space-y-3">
-                        <div className="font-semibold text-sm text-gray-700 mb-3">Vehicle Visits:</div>
+                        <div className="font-semibold text-sm text-gray-700 mb-3">Asset Visits:</div>
                         {location.visits.map((visit, vIdx) => (
                           <div key={vIdx} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                             <div className="flex items-start justify-between">

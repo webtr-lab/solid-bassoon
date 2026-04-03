@@ -21,7 +21,7 @@ function VehicleHistory({ savedLocations, onRefresh, vehicleId }: VehicleHistory
 
   const handleEdit = (location: SavedLocation) => {
     setEditingId(location.id);
-    setEditName(location.name);
+    setEditName(location.name || '');
     setEditNotes(location.notes || '');
   };
 

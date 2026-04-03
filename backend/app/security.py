@@ -40,6 +40,22 @@ def require_manager_or_admin(f):
     """Decorator to require manager or admin role"""
     return require_role('admin', 'manager')(f)
 
+def require_operator_or_above(f):
+    """Decorator to require operator, manager, or admin role
+
+    Operator role permissions:
+    - Can view and track vehicles
+    - Can pin/save locations for vehicles
+    - Can save places of interest
+    - Can access mobile interface
+
+    Does NOT include:
+    - Creating/editing/deleting vehicles
+    - Managing users
+    - Backup management
+    """
+    return require_role('admin', 'manager', 'operator')(f)
+
 # ============================================================================
 # INPUT VALIDATION
 # ============================================================================
@@ -208,7 +224,6 @@ class RateLimiter:
 
 # Initialize rate limiters
 login_rate_limiter = RateLimiter(max_attempts=5, window_seconds=900)  # 5 attempts per 15 min
-register_rate_limiter = RateLimiter(max_attempts=10, window_seconds=3600)  # 10 per hour
 
 # ============================================================================
 # PASSWORD UTILITIES

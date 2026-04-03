@@ -7,6 +7,7 @@ export interface VehicleFormData {
   name: string;
   device_id: string;
   is_active: boolean;
+  entity_type: 'vehicle' | 'sales_rep';
 }
 
 /**
@@ -45,11 +46,11 @@ function VehicleFormModal({
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-md">
         <h3 className="text-xl font-bold mb-4">
-          {isEditing ? 'Edit Vehicle' : 'Add New Vehicle'}
+          {isEditing ? 'Edit Asset' : 'Add New Asset'}
         </h3>
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-2">Vehicle Name</label>
+            <label className="block text-sm font-medium mb-2">Asset Name</label>
             <input
               type="text"
               value={formData.name}
@@ -70,6 +71,18 @@ function VehicleFormModal({
               required
             />
             <p className="text-xs text-gray-500 mt-1">Must match the device ID used in mobile app</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Type</label>
+            <select
+              value={formData.entity_type}
+              onChange={(e) => handleChange('entity_type', e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg"
+            >
+              <option value="vehicle">Vehicle</option>
+              <option value="sales_rep">Sales Rep</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">Vehicles appear in Vehicle Tracking, Sales Reps in Sales Reps tab</p>
           </div>
           <div>
             <label className="flex items-center">

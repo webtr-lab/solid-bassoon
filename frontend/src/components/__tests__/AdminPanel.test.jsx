@@ -28,7 +28,7 @@ jest.mock('../AdminPanel/UserManagement', () => {
 
 jest.mock('../AdminPanel/VehicleManagement', () => {
   return function MockVehicleManagement() {
-    return <div data-testid="vehicle-management">Vehicle Management</div>;
+    return <div data-testid="vehicle-management">Field Assets</div>;
   };
 });
 

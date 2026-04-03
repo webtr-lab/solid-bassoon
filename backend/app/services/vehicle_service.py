@@ -35,7 +35,8 @@ def format_vehicle(vehicle):
         'name': vehicle.name,
         'device_id': vehicle.device_id,
         'api_token': vehicle.api_token,  # Include API token for admin management
-        'is_active': vehicle.is_active
+        'is_active': vehicle.is_active,
+        'entity_type': vehicle.entity_type
     }
 
 
@@ -188,7 +189,7 @@ def export_vehicle_data(vehicle_id, format_type='json', hours=24):
     } for loc in locations]
 
 
-def create_vehicle(name, device_id, is_active=True):
+def create_vehicle(name, device_id, is_active=True, entity_type='vehicle'):
     """
     Create a new vehicle
 
@@ -196,6 +197,7 @@ def create_vehicle(name, device_id, is_active=True):
         name: Vehicle name
         device_id: Unique device identifier
         is_active: Whether vehicle is active (default: True)
+        entity_type: Type of entity - 'vehicle' or 'sales_rep' (default: 'vehicle')
 
     Returns:
         Vehicle object or None if device_id already exists
@@ -208,7 +210,8 @@ def create_vehicle(name, device_id, is_active=True):
     vehicle = Vehicle(
         name=name.strip(),
         device_id=device_id.strip(),
-        is_active=is_active
+        is_active=is_active,
+        entity_type=entity_type
     )
 
     # Generate API token for GPS authentication
@@ -228,7 +231,7 @@ def create_vehicle(name, device_id, is_active=True):
         raise
 
 
-def update_vehicle(vehicle_id, name=None, device_id=None, is_active=None):
+def update_vehicle(vehicle_id, name=None, device_id=None, is_active=None, entity_type=None):
     """
     Update vehicle information
 
@@ -237,6 +240,7 @@ def update_vehicle(vehicle_id, name=None, device_id=None, is_active=None):
         name: New name (optional)
         device_id: New device ID (optional)
         is_active: New active status (optional)
+        entity_type: New entity type - 'vehicle' or 'sales_rep' (optional)
 
     Returns:
         Updated Vehicle object or None if not found or device_id conflict
@@ -258,6 +262,8 @@ def update_vehicle(vehicle_id, name=None, device_id=None, is_active=None):
             vehicle.device_id = device_id.strip()
         if is_active is not None:
             vehicle.is_active = bool(is_active)
+        if entity_type:
+            vehicle.entity_type = entity_type
 
         db.session.commit()
         current_app.logger.info(f"Vehicle updated: {vehicle.name}")

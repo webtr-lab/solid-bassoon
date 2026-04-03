@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import TabNavigation from './AdminPanel/TabNavigation';
 import UserManagement from './AdminPanel/UserManagement';
 import VehicleManagement from './AdminPanel/VehicleManagement';
 import POIManagement from './AdminPanel/POIManagement';
 import VisitsReport from './VisitsReport';
+import type { UserRole } from '../types';
 
 /**
  * Tab type definition
@@ -11,22 +12,17 @@ import VisitsReport from './VisitsReport';
 type TabType = 'users' | 'vehicles' | 'poi' | 'reports';
 
 /**
- * User role type
- */
-type UserRole = 'admin' | 'manager' | 'viewer';
-
-/**
  * Props for AdminPanel component
  */
 interface AdminPanelProps {
-  currentUserRole: UserRole;
+  currentUserRole?: UserRole;
 }
 
 /**
  * AdminPanel Component
  * Container component that manages tabs and delegates to sub-components
  */
-function AdminPanel({ currentUserRole }: AdminPanelProps): JSX.Element {
+function AdminPanel({ currentUserRole = 'viewer' }: AdminPanelProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<TabType>('users');
 
   useEffect(() => {
@@ -35,11 +31,15 @@ function AdminPanel({ currentUserRole }: AdminPanelProps): JSX.Element {
     }
   }, [currentUserRole, activeTab]);
 
+  const handleSetActiveTab = (tab: string) => {
+    setActiveTab(tab as TabType);
+  };
+
   return (
     <div className="h-full flex flex-col bg-gray-100">
       <TabNavigation
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleSetActiveTab}
         currentUserRole={currentUserRole}
       />
 

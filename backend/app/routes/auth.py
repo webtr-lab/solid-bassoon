@@ -12,7 +12,7 @@ from app.security import (
     login_rate_limiter, log_audit_event
 )
 from app.limiter import limiter
-from app.csrf_protection import require_csrf
+from app.csrf_protection import require_csrf, csrf_exempt
 from app.services.email_service import send_password_reset_email, send_password_changed_email, send_registration_confirmation_email
 from app.monitoring import record_failed_login
 from datetime import datetime, timedelta
@@ -105,7 +105,7 @@ def register():
 
 @auth_bp.route('/login', methods=['POST'])
 @limiter.limit("10 per minute")
-@require_csrf
+@csrf_exempt
 def login():
     """Authenticate user and create session"""
     try:

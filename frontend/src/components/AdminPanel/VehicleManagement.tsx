@@ -18,7 +18,8 @@ function VehicleManagement(): JSX.Element {
   const [formData, setFormData] = useState<VehicleFormData>({
     name: '',
     device_id: '',
-    is_active: true
+    is_active: true,
+    entity_type: 'vehicle'
   });
 
   useEffect(() => {
@@ -44,7 +45,7 @@ function VehicleManagement(): JSX.Element {
         body: JSON.stringify(formData)
       });
       setShowAddModal(false);
-      setFormData({ name: '', device_id: '', is_active: true });
+      setFormData({ name: '', device_id: '', is_active: true, entity_type: 'vehicle' });
       fetchVehicles();
     } catch (error) {
       alert(getErrorMessage(error, 'Failed to add vehicle'));
@@ -62,7 +63,7 @@ function VehicleManagement(): JSX.Element {
         body: JSON.stringify(formData)
       });
       setEditingVehicle(null);
-      setFormData({ name: '', device_id: '', is_active: true });
+      setFormData({ name: '', device_id: '', is_active: true, entity_type: 'vehicle' });
       fetchVehicles();
     } catch (error) {
       alert(getErrorMessage(error, 'Failed to update vehicle'));
@@ -102,6 +103,12 @@ function VehicleManagement(): JSX.Element {
     if (filterStatus === 'inactive') {
       return !v.is_active;
     }
+    if (filterStatus === 'vehicles') {
+      return v.entity_type !== 'sales_rep';
+    }
+    if (filterStatus === 'sales_reps') {
+      return v.entity_type === 'sales_rep';
+    }
     return true;
   });
 
@@ -110,30 +117,31 @@ function VehicleManagement(): JSX.Element {
     setFormData({
       name: vehicle.name,
       device_id: vehicle.device_id,
-      is_active: vehicle.is_active
+      is_active: vehicle.is_active ?? true,
+      entity_type: vehicle.entity_type ?? 'vehicle'
     });
   };
 
   const handleAddClick = (): void => {
-    setFormData({ name: '', device_id: '', is_active: true });
+    setFormData({ name: '', device_id: '', is_active: true, entity_type: 'vehicle' });
     setShowAddModal(true);
   };
 
   const handleFormCancel = (): void => {
     setShowAddModal(false);
     setEditingVehicle(null);
-    setFormData({ name: '', device_id: '', is_active: true });
+    setFormData({ name: '', device_id: '', is_active: true, entity_type: 'vehicle' });
   };
 
   return (
     <div className="max-w-6xl">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Vehicle Management</h2>
+        <h2 className="text-2xl font-bold">Field Assets</h2>
         <button
           onClick={handleAddClick}
           className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
         >
-          Add Vehicle
+          Add Asset
         </button>
       </div>
 

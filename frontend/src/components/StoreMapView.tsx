@@ -58,7 +58,7 @@ function StoreMapView({
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4">
           <h2 className="text-xl font-bold flex items-center">
             <span className="text-2xl mr-2">📍</span>
-            Store Locations
+            Business Locations
           </h2>
           <p className="text-sm text-blue-100 mt-1">
             {stats.total} total locations
@@ -110,7 +110,7 @@ function StoreMapView({
           <div className="grid grid-cols-3 gap-2 text-center">
             <div>
               <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
-              <div className="text-xs text-gray-600">Total Stores</div>
+              <div className="text-xs text-gray-600">Total Businesses</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-green-600">{categories.length}</div>
@@ -132,7 +132,7 @@ function StoreMapView({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <p className="text-red-600 font-semibold mb-2">Failed to Load Stores</p>
+              <p className="text-red-600 font-semibold mb-2">Failed to Load Businesses</p>
               <p className="text-sm text-gray-600 mb-4">{error}</p>
               <button
                 onClick={onRefresh}
@@ -149,7 +149,7 @@ function StoreMapView({
           ) : filteredStores.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <div className="text-4xl mb-2">🔍</div>
-              <p>No stores found</p>
+              <p>No businesses found</p>
               {searchTerm && (
                 <button
                   onClick={() => setSearchTerm('')}
@@ -212,11 +212,11 @@ function StoreMapView({
                 Refreshing...
               </>
             ) : (
-              <>🔄 Refresh Stores</>
+              <>🔄 Refresh Businesses</>
             )}
           </button>
           <p className="text-xs text-gray-500 mt-2 text-center">
-            Use mobile interface to add new stores
+            Use mobile interface to add new businesses
           </p>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, FormEvent, ChangeEvent } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents, LeafletMouseEvent } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import type { LeafletMouseEvent } from 'leaflet';
 import { apiFetch } from '../../utils/apiClient';
 import { createPOIIcon } from '../../utils/markerIcons';
 import { PlaceOfInterest } from '../../types';
@@ -224,7 +225,7 @@ function POIFormModal({ isOpen, isEditing, formData, onChange, onSubmit, onCance
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-white rounded-lg p-6 w-full max-w-2xl my-auto max-h-[90vh] overflow-y-auto">
         <h3 className="text-xl font-bold mb-4">
-          {isEditing ? 'Edit Place' : 'Add New Place'}
+          {isEditing ? 'Edit Business' : 'Add New Business'}
         </h3>
         <form onSubmit={handleFormSubmit} className="space-y-2">
           <div>
@@ -386,7 +387,7 @@ function POIFormModal({ isOpen, isEditing, formData, onChange, onSubmit, onCance
               disabled={loading || validatingName || validatingArea}
               className="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50 font-medium"
             >
-              {loading ? 'Saving...' : (isEditing ? 'Update Place' : 'Add Place')}
+              {loading ? 'Saving...' : (isEditing ? 'Update Business' : 'Add Business')}
             </button>
             <button
               type="button"

@@ -21,14 +21,16 @@ interface UseFetchVehiclesReturn {
  */
 export const useFetchVehicles = (
   isAuthenticated: boolean,
-  activeView: string
+  activeView: string,
+  entityType?: 'vehicle' | 'sales_rep'
 ): UseFetchVehiclesReturn => {
   const [vehicles, setVehicles] = useState<VehicleWithLocation[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const fetchVehicles = async (): Promise<void> => {
     try {
-      const vehiclesData = await apiFetch<ApiResponse<Vehicle[]>>('/api/vehicles');
+      const typeParam = entityType ? `?type=${entityType}` : '';
+      const vehiclesData = await apiFetch<ApiResponse<Vehicle[]>>(`/api/vehicles${typeParam}`);
 
       const vehiclesWithLocations = await Promise.all(
         (vehiclesData.data || []).map(async (vehicle) => {
@@ -56,16 +58,21 @@ export const useFetchVehicles = (
     }
   };
 
-  // Auto-fetch vehicles when authenticated or when view changes to tracking
+  // Auto-fetch vehicles when authenticated or when view changes to tracking/sales_reps
   useEffect(() => {
-    if (isAuthenticated && activeView === 'tracking') {
+    const shouldFetch = isAuthenticated && (
+      (activeView === 'tracking' && (!entityType || entityType === 'vehicle')) ||
+      (activeView === 'sales_reps' && entityType === 'sales_rep')
+    );
+
+    if (shouldFetch) {
       fetchVehicles();
       const interval = setInterval(() => {
         fetchVehicles();
       }, REFRESH_INTERVALS.VEHICLES);
       return () => clearInterval(interval);
     }
-  }, [isAuthenticated, activeView]);
+  }, [isAuthenticated, activeView, entityType]);
 
   return {
     vehicles,

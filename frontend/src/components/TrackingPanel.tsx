@@ -20,6 +20,7 @@ interface TrackingPanelProps {
   onRefreshLocations: () => void;
   showVehiclesOnMap: boolean;
   onToggleShowVehicles: (show: boolean) => void;
+  entityLabel?: string;  // 'Vehicle' or 'Sales Rep'
 }
 
 function TrackingPanel({
@@ -32,6 +33,7 @@ function TrackingPanel({
   onRefreshLocations,
   showVehiclesOnMap,
   onToggleShowVehicles,
+  entityLabel = 'Vehicle',
 }: TrackingPanelProps) {
   const [vehicleListCollapsed, setVehicleListCollapsed] = useState<boolean>(false);
 
@@ -40,7 +42,7 @@ function TrackingPanel({
       {/* Toggle for showing/hiding vehicles on map */}
       <div className="bg-white rounded-lg shadow p-4">
         <label className="flex items-center justify-between cursor-pointer">
-          <span className="text-sm font-medium text-gray-700">Show Vehicles on Map</span>
+          <span className="text-sm font-medium text-gray-700">Show {entityLabel}s on Map</span>
           <div className="relative">
             <input
               type="checkbox"
@@ -60,6 +62,7 @@ function TrackingPanel({
         onSelectVehicle={onSelectVehicle}
         collapsed={vehicleListCollapsed}
         onToggleCollapse={() => setVehicleListCollapsed(!vehicleListCollapsed)}
+        entityLabel={entityLabel}
       />
 
       {/* Vehicle Details - shown only when vehicle is selected */}

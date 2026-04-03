@@ -13,7 +13,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     is_active = db.Column(db.Boolean, default=True, index=True)
-    role = db.Column(db.String(20), default='viewer')
+    role = db.Column(db.String(20), default='viewer')  # Valid: admin, manager, operator, viewer
     must_change_password = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
@@ -25,6 +25,7 @@ class Vehicle(db.Model):
     device_id = db.Column(db.String(100), unique=True, nullable=False)
     api_token = db.Column(db.String(64), unique=True, nullable=True, index=True)  # API token for GPS authentication
     is_active = db.Column(db.Boolean, default=True)
+    entity_type = db.Column(db.String(20), default='vehicle', nullable=False, index=True)  # 'vehicle' or 'sales_rep'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     locations = db.relationship('Location', backref='vehicle', lazy=True, cascade='all, delete-orphan')

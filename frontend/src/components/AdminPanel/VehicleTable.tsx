@@ -18,8 +18,9 @@ function VehicleTable({ vehicles, onEdit, onToggleActive, onDelete }: VehicleTab
       <table className="min-w-full divide-y divide-gray-200">
         <thead className="bg-gray-50">
           <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Asset Name</th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Device ID</th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Asset Type</th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
           </tr>
@@ -29,6 +30,15 @@ function VehicleTable({ vehicles, onEdit, onToggleActive, onDelete }: VehicleTab
             <tr key={vehicle.id} className={!vehicle.is_active ? 'bg-gray-50' : ''}>
               <td className="px-6 py-4 whitespace-nowrap font-medium">{vehicle.name}</td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{vehicle.device_id}</td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                  vehicle.entity_type === 'sales_rep'
+                    ? 'bg-purple-100 text-purple-800'
+                    : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {vehicle.entity_type === 'sales_rep' ? 'Sales Rep' : 'Vehicle'}
+                </span>
+              </td>
               <td className="px-6 py-4 whitespace-nowrap">
                 <button
                   onClick={() => onToggleActive(vehicle)}

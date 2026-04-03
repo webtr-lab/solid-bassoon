@@ -10,7 +10,7 @@ from app.limiter import limiter
 from app.csrf_protection import require_csrf
 from app.security import (
     ValidationError, validate_gps_coordinates, require_manager_or_admin,
-    PaginationParams, log_audit_event
+    require_operator_or_above, PaginationParams, log_audit_event
 )
 from app.services.place_service import (
     get_place_or_404, format_place, search_places, create_place,
@@ -77,7 +77,7 @@ def get_areas():
 
 @places_bp.route('', methods=['POST'])
 @login_required
-@require_manager_or_admin
+@require_operator_or_above
 @limiter.limit("20 per hour")  # Prevent spam while allowing legitimate bulk creation
 @require_csrf
 def create_new_place():

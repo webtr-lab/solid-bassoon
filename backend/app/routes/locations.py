@@ -9,7 +9,6 @@ from app.models import db, Vehicle
 from app.security import ValidationError, validate_gps_coordinates
 from app.csrf_protection import csrf_exempt
 from app.services.location_service import save_location
-from app.websocket_events import broadcast_location_update
 from app.limiter import limiter
 from app.monitoring import record_gps_submission
 
@@ -69,16 +68,6 @@ def receive_gps():
             f"GPS data received for vehicle {vehicle.name} "
             f"at ({latitude:.6f}, {longitude:.6f}), speed: {speed} km/h"
         )
-
-        # Broadcast location update via WebSocket for real-time tracking
-        broadcast_location_update(vehicle.id, {
-            'id': location.id,
-            'latitude': location.latitude,
-            'longitude': location.longitude,
-            'speed': location.speed,
-            'timestamp': location.timestamp.isoformat()
-        })
-
         # Record successful GPS submission
         record_gps_submission(vehicle.id, success=True)
 
