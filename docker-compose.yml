@@ -62,7 +62,7 @@ services:
       - maps-network
     restart: unless-stopped
     ports:
-      - "0.0.0.0:5000:5000"
+      - "127.0.0.1:5000:5000"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health')"]
       interval: 30s
