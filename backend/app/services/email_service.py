@@ -16,8 +16,10 @@ def init_email(app):
     # Configure Flask-Mail from environment variables
     app.config['MAIL_SERVER'] = os.getenv('SMTP_HOST', 'smtp.example.com')
     app.config['MAIL_PORT'] = int(os.getenv('SMTP_PORT', 465))
-    app.config['MAIL_USE_TLS'] = os.getenv('SMTP_PORT', '465') == '587'
-    app.config['MAIL_USE_SSL'] = os.getenv('SMTP_PORT', '465') == '465'
+    smtp_port = os.getenv('SMTP_PORT', '465')
+    # Port 587 = STARTTLS, Port 465 = Implicit SSL
+    app.config['MAIL_USE_TLS'] = smtp_port == '587'
+    app.config['MAIL_USE_SSL'] = smtp_port == '465'
     app.config['MAIL_USERNAME'] = os.getenv('SMTP_USER')
     app.config['MAIL_PASSWORD'] = os.getenv('SMTP_PASS')
     app.config['MAIL_DEFAULT_SENDER'] = os.getenv('SMTP_USER', 'noreply@mapstracker.com')
