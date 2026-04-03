@@ -455,10 +455,7 @@ def automatic_backup():
         current_app.logger.info("Running automatic backup with new backup manager...")
 
         # Use the new backup-manager.sh script for organized backups
-        script_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'backup-manager.sh'
-        )
+        script_path = '/app/scripts/backup/backup-manager.sh'
 
         result = subprocess.run(
             [script_path, '--auto'],
