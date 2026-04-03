@@ -4,7 +4,7 @@ global:
   smtp_from: 'notification@praxisnetworking.com'
   smtp_auth_username: 'notification@praxisnetworking.com'
   smtp_auth_password: 'vhnwPn3mK7wR'
-  smtp_require_tls: true
+  smtp_require_tls: false
 
 # Route all alerts to email
 route:
@@ -42,8 +42,8 @@ receivers:
           {{ if ne .Status "firing" }}Resolved: {{ .EndsAt }}{{ end }}
           {{ end }}
 
-          Prometheus: http://localhost:9090/alerts
-          Grafana: http://localhost:3001/d/maps-tracker-main
+          Prometheus: https://maps.devnan.com:9090/alerts
+          Grafana: https://maps.devnan.com:3001/d/maps-tracker-main
 
 # Inhibition rules (prevent notification spam)
 inhibit_rules:
