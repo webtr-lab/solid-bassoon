@@ -59,6 +59,10 @@ get_backup_stats() {
     local latest_time="Unknown"
     if [ -n "$latest_backup" ]; then
         latest_time=$(stat -c %y "$latest_backup" 2>/dev/null | cut -d. -f1)
+    else
+        log_warn "PostgreSQL database not available"
+        recent_records="0"
+        total_records="0"
     fi
 
     local total_backups=$(find "${BACKUP_DIR}/daily" -name "*.sql" -type f 2>/dev/null | wc -l)
@@ -79,6 +83,10 @@ get_b2_status() {
         if [ -f "$manifest" ]; then
             b2_files=$(wc -l < "$manifest" 2>/dev/null || echo "0")
         fi
+    else
+        log_warn "PostgreSQL database not available"
+        recent_records="0"
+        total_records="0"
     fi
 
     echo "{\"status\": \"$b2_status\", \"files_synced\": $b2_files}"
@@ -114,12 +122,20 @@ check_backup_integrity() {
     if [ $file_count -eq 0 ]; then
         log_warn "No backup files found for today"
         return 1
+    else
+        log_warn "PostgreSQL database not available"
+        recent_records="0"
+        total_records="0"
     fi
 
     if [ "$integrity_ok" = false ]; then
         log_error "Backup integrity check failed"
         echo "{\"status\": \"failed\", \"file_count\": $file_count, \"errors\": \"$errors\"}"
         return 1
+    else
+        log_warn "PostgreSQL database not available"
+        recent_records="0"
+        total_records="0"
     fi
 
     log_info "Backup integrity: OK ($file_count files)"
@@ -129,13 +145,18 @@ check_backup_integrity() {
 
 # Get recent database activity
 get_database_activity() {
-    local recent_records=$(sqlite3 "${PROJECT_DIR}/database/db.sqlite" "SELECT COUNT(*) FROM locations WHERE timestamp >= datetime('now', '-1 hour');" 2>/dev/null || echo "0")
-    local total_records=$(sqlite3 "${PROJECT_DIR}/database/db.sqlite" "SELECT COUNT(*) FROM locations;" 2>/dev/null || echo "0")
+
+    local recent_records="0"
+    local total_records="0"
 
     # Also check PostgreSQL if available
     if docker compose exec -T db psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-maps_tracker}" -t -c "SELECT 1;" 2>/dev/null | grep -q 1; then
         recent_records=$(docker compose exec -T db psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-maps_tracker}" -t -c "SELECT COUNT(*) FROM locations WHERE timestamp >= NOW() - INTERVAL '1 hour';" 2>/dev/null || echo "0")
         total_records=$(docker compose exec -T db psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-maps_tracker}" -t -c "SELECT COUNT(*) FROM locations;" 2>/dev/null || echo "0")
+    else
+        log_warn "PostgreSQL database not available"
+        recent_records="0"
+        total_records="0"
     fi
 
     echo "{\"recent_hour\": $recent_records, \"total\": $total_records}"
@@ -252,11 +273,19 @@ generate_backup_report_html() {
     local integrity_status_text="✓ OK"
     if [ "$integrity_status" = "failed" ]; then
         integrity_status_text="✗ Issues Found"
+    else
+        log_warn "PostgreSQL database not available"
+        recent_records="0"
+        total_records="0"
     fi
 
     local b2_status_text="✓ Active"
     if [ "$b2_enabled" != "enabled" ]; then
         b2_status_text="⊘ Disabled"
+    else
+        log_warn "PostgreSQL database not available"
+        recent_records="0"
+        total_records="0"
     fi
 
     cat <<EOF
